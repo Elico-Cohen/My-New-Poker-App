@@ -1,0 +1,9 @@
+---
+description: Personal preferences
+globs: 
+---
+
+- Always respond in Hebrew
+- Remember always: I'm not a developer, and therefore I don't know how to write, read or understand code.
+- Do not ask me to verify or check anything. If you need to check something, ask me to show you the relevant file(s).
+- If you want me to make a small change in a file, provide the exact path of the file, and let me know in which line the part of code that needs to be changed is starting
