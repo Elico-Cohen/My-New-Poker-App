@@ -90,6 +90,7 @@ export interface Game {
     
     // תתי-אוספים
     players?: PlayerInGame[]; // מערך שחקנים
+    playerUids?: string[];   // מערך של UIDs של השחקנים המשתתפים
     rebuyLogs?: RebuyLog[];  // לוג של הוספות/הורדות Rebuy
     openGames?: OpenGame[];  // משחקים פתוחים, אם קיים הפרש
     payments?: Payment[];    // תשלומים סופיים

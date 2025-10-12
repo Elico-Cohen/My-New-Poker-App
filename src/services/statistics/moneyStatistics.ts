@@ -76,6 +76,17 @@ export const getPlayerMoneyStats = async (
     const filteredGames = filterGames(allGames, filter);
     const allUsers = await getAllUsers();
     
+    // קבלת השחקנים הקבועים של הקבוצה אם יש סינון לפי קבוצה
+    let permanentPlayersInGroup: Set<string> | null = null;
+    if (filter.groupId && filter.groupId !== 'all') {
+      const allGroups = await getAllActiveGroups();
+      const group = allGroups.find(g => g.id === filter.groupId);
+      if (group && group.permanentPlayers) {
+        permanentPlayersInGroup = new Set(group.permanentPlayers);
+        console.log(`getPlayerMoneyStats: מסנן לפי קבוצה ${group.name}, שחקנים קבועים: ${group.permanentPlayers.length}`);
+      }
+    }
+    
     // Track statistics for each player
     const playerStatsMap = new Map<string, {
       playerId: string;
@@ -91,6 +102,11 @@ export const getPlayerMoneyStats = async (
       game.players?.forEach(player => {
         const playerId = player.userId || player.id;
         if (!playerId) return;
+        
+        // אם יש סינון לפי קבוצה, כלול רק שחקנים קבועים
+        if (permanentPlayersInGroup && !permanentPlayersInGroup.has(playerId)) {
+          return; // דלג על שחקן שאינו קבוע בקבוצה
+        }
         
         // Get player name
         const playerName = player.name || 

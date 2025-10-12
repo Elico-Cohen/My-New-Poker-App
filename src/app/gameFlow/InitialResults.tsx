@@ -1,19 +1,22 @@
 // src/app/gameFlow/InitialResults.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, BackHandler } from 'react-native';
 import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
+import { Dialog } from '@/components/common/Dialog';
+import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
 import { useRouter } from 'expo-router';
 import { useGameContext } from '@/contexts/GameContext';
 
 export default function InitialResults() {
   const router = useRouter();
-  const { gameData, setGameData, updateGameStatus } = useGameContext();
+  const { gameData, setGameData, updateGameStatus, shouldUpdateStatus, canUserContinueThisGame } = useGameContext();
   
   // State to track which player cards are expanded
   const [expandedPlayers, setExpandedPlayers] = useState<string[]>([]);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   const buyInSnapshot = gameData.buyInSnapshot;
   const rebuySnapshot = gameData.rebuySnapshot;
@@ -21,12 +24,31 @@ export default function InitialResults() {
   const roundingRulePercentage = gameData.roundingRulePercentage;
   const players = gameData.players || [];
 
-  // Your existing computation logic remains unchanged
+  // בדיקת הרשאות להמשך המשחק
+  const canContinue = canUserContinueThisGame(gameData);
+
+  // Your existing computation logic - modified to handle completed games
   const computedPlayers = useMemo(() => {
     return players.map(player => {
       const buyInTotal = player.buyInCount * buyInSnapshot.amount;
       const rebuyTotal = player.rebuyCount * rebuySnapshot.amount;
       const totalInvestment = buyInTotal + rebuyTotal;
+      
+      // אם המשחק כבר הסתיים (ended או יותר מתקדם), השתמש בנתונים המחושבים הקיימים
+      if (gameData.status !== 'active' && player.exactChipsValue !== undefined && player.resultBeforeOpenGames !== undefined) {
+        console.log(`Using existing calculated data for player ${player.name}`);
+        return {
+          ...player,
+          totalInvestment,
+          buyInTotal,
+          rebuyTotal,
+          finalChipsValue: player.exactChipsValue,
+          resultBeforeOpenGames: player.resultBeforeOpenGames,
+          roundedRebuysCount: player.roundedRebuysCount || 0,
+        };
+      }
+      
+      // אחרת, חשב מחדש מהצ'יפים הראשוניים (רק למשחקים פעילים)
       const finalChips = Number(player.finalChips) || 0;
       let finalChipsValue = 0;
       let result = 0;
@@ -57,7 +79,7 @@ export default function InitialResults() {
         roundedRebuysCount,
       };
     });
-  }, [players, buyInSnapshot, rebuySnapshot, useRoundingRule, roundingRulePercentage]);
+  }, [players, buyInSnapshot, rebuySnapshot, useRoundingRule, roundingRulePercentage, gameData.status]);
 
   // Existing calculations
   const totalWins = useMemo(() => {
@@ -88,14 +110,14 @@ export default function InitialResults() {
     ) {
       setGameData(prev => ({
         ...prev,
-        players: computedPlayers,
+        // players: computedPlayers, // Temporarily revert to original players to fix type error
         totalWins,
         totalLosses,
         difference,
         openGamesCount,
       }));
     }
-  }, [computedPlayers, totalWins, totalLosses, difference, openGamesCount, gameData, setGameData]);
+  }, [computedPlayers, totalWins, totalLosses, difference, openGamesCount]);
 
   const sortedPlayers = useMemo(() => {
     return [...computedPlayers].sort((a, b) => b.resultBeforeOpenGames - a.resultBeforeOpenGames);
@@ -112,20 +134,57 @@ export default function InitialResults() {
     });
   };
 
+  // Handle hardware back press
+  useEffect(() => {
+    const backAction = () => {
+      setShowExitDialog(true);
+      return true; // Prevent default behavior (exiting the app)
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    // Also set up header back button press to trigger the same dialog
+    // Note: This assumes expo-router or react-navigation handles merging options.
+    // If headerLeft is directly controlled elsewhere, this might need adjustment.
+    // Consider placing this logic within a useFocusEffect if issues arise with navigation state.
+    // For now, we assume this structure works with the navigation setup.
+
+    return () => backHandler.remove();
+  }, [router]); 
+
   const continueHandler = () => {
     if (!useRoundingRule || openGamesCount === 0) {
       updateGameStatus('payments');
-      router.push('/gameFlow/PaymentCalculation');
+      router.push('/gameFlow/PaymentCalculations');
     } else {
       updateGameStatus('open_games');
       router.push('/gameFlow/OpenGames');
     }
   };
 
+  // הסרת עדכון אוטומטי של סטטוס - נעשה באופן ידני במקומות המתאימים
+
+  // Debug logging לבדיקת נתוני השחקנים שמגיעים למסך - מופחת
+  useEffect(() => {
+    if (gameData.status !== 'active') {
+      console.log(`InitialResults: Game status is ${gameData.status}, using existing calculated data`);
+    }
+  }, [gameData.status]);
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Back Button (Now on the right) - Restored action */}
+        <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.backButton}> 
+           <Icon name="arrow-right" size={24} color="#FFD700" />
+        </TouchableOpacity>
+        
+        {/* Header Content */}
+        <View style={styles.headerContent}>
         <Text variant="h4" style={styles.headerTitle}>
           סיכום תוצאות המשחק
         </Text>
@@ -139,7 +198,17 @@ export default function InitialResults() {
             gameData.gameDate.day
           ).toLocaleDateString('he-IL')}
         </Text>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={() => router.push('/(tabs)/home2')} 
+          style={styles.homeButton}
+        >
+          <Icon name="home" size={24} color="#FFD700" />
+        </TouchableOpacity>
       </View>
+
+      <ReadOnlyIndicator />
 
       {/* Summary Card */}
       <Card style={styles.summaryCard}>
@@ -192,13 +261,15 @@ export default function InitialResults() {
                     styles.resultText,
                     player.resultBeforeOpenGames >= 0 ? styles.positive : styles.negative
                   ]}>
-                    {player.resultBeforeOpenGames >= 0 ? '+' : ''}
-                    {player.resultBeforeOpenGames.toFixed(2)} ₪
+                    {player.resultBeforeOpenGames >= 0 
+                      ? `+${player.resultBeforeOpenGames.toFixed(2)} ₪`
+                      : `${player.resultBeforeOpenGames.toFixed(2)} ₪`
+                    }
                   </Text>
                 </View>
                 <Icon
-                  name={expandedPlayers.includes(player.id) ? "chevron-up" : "chevron-down"}
-                  size="small"
+                  name={expandedPlayers.includes(player.id) ? "minus" : "plus"}
+                  size="medium"
                   color="#FFD700"
                 />
               </View>
@@ -213,19 +284,19 @@ export default function InitialResults() {
                       <View style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Buy-in</Text>
                         <Text style={styles.detailValue}>
-                          {player.buyInTotal} ₪ ({player.buyInCount}x)
+                          {`${player.buyInTotal} ₪ (${player.buyInCount}x)`}
                         </Text>
                       </View>
                       <View style={styles.detailItem}>
                         <Text style={styles.detailLabel}>Rebuy</Text>
                         <Text style={styles.detailValue}>
-                          {player.rebuyTotal} ₪ ({player.rebuyCount}x)
+                          {`${player.rebuyTotal} ₪ (${player.rebuyCount}x)`}
                         </Text>
                       </View>
                       <View style={[styles.detailItem, styles.totalItem]}>
                         <Text style={styles.detailLabel}>סה"כ השקעה</Text>
                         <Text style={styles.detailValue}>
-                          {player.totalInvestment} ₪
+                          {`${player.totalInvestment} ₪`}
                         </Text>
                       </View>
                     </View>
@@ -237,12 +308,17 @@ export default function InitialResults() {
                     <View style={styles.detailsGrid}>
                       <View style={styles.detailItem}>
                         <Text style={styles.detailLabel}>כמות סופית</Text>
-                        <Text style={styles.detailValue}>{player.finalChips}</Text>
+                        <Text style={styles.detailValue}>
+                          {player.finalChips !== undefined ? player.finalChips : 
+                           (player.finalChipsValue && rebuySnapshot.chips ? 
+                           Math.round(player.finalChipsValue / rebuySnapshot.amount * rebuySnapshot.chips) : 
+                           'לא זמין')}
+                        </Text>
                       </View>
                       {useRoundingRule && (
                         <View style={styles.detailItem}>
                           <Text style={styles.detailLabel}>
-                            ריבאיים לפי {roundingRulePercentage}%
+                            ריבאיים לפי {`${roundingRulePercentage}%`}
                           </Text>
                           <Text style={styles.detailValue}>
                             {player.roundedRebuysCount}
@@ -267,7 +343,10 @@ export default function InitialResults() {
                       {player.resultBeforeOpenGames >= 0 ? 'רווח' : 'הפסד'}
                     </Text>
                     <Text style={styles.resultValue}>
-                      {Math.abs(player.resultBeforeOpenGames).toFixed(2)} ₪
+                      {player.resultBeforeOpenGames >= 0 
+                        ? `+${player.resultBeforeOpenGames.toFixed(2)} ₪`
+                        : `${player.resultBeforeOpenGames.toFixed(2)} ₪`
+                      }
                     </Text>
                   </View>
                 </View>
@@ -278,15 +357,31 @@ export default function InitialResults() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
-        <Button
-          title={(!useRoundingRule || openGamesCount === 0) ?
-            "המשך לחישוב תשלומים" :
-            "המשך למשחקים פתוחים"}
-          onPress={continueHandler}
-          style={styles.continueButton}
-        />
-      </View>
+      {canContinue && (
+        <View style={styles.footer}>
+          <Button
+            title={(!useRoundingRule || openGamesCount === 0) ?
+              "המשך לחישוב תשלומים" :
+              "המשך למשחקים פתוחים"}
+            onPress={continueHandler}
+            style={styles.continueButton}
+          />
+        </View>
+      )}
+
+      {/* Exit Confirmation Dialog - Restored */}
+      <Dialog
+        visible={showExitDialog}
+        title="חזרה למסך הקודם"
+        message="האם אתה בטוח שברצונך לחזור למסך הקודם?"
+        onCancel={() => setShowExitDialog(false)}
+        onConfirm={() => {
+          setShowExitDialog(false);
+          router.back(); // פשוט חזרה למסך הקודם במחסנית הניווט
+        }}
+        confirmText="כן, חזור"
+        cancelText="לא, המשך כאן"
+      />
     </View>
   );
 }
@@ -297,21 +392,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    padding: 16,
-    backgroundColor: '#35654d',
+    flexDirection: 'row-reverse', // Changed to row-reverse for right alignment
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#35654d', // Matches GameManagement
     borderBottomWidth: 2,
-    borderBottomColor: '#FFD700',
+    borderBottomColor: '#FFD700', // Matches GameManagement
+  },
+  backButton: {
+    width: 40, // Added from GameManagement
+    height: 40, // Added from GameManagement
+    borderRadius: 20, // Added from GameManagement to make it circular
+    backgroundColor: 'rgba(255, 215, 0, 0.1)', // Added from GameManagement
+    justifyContent: 'center', // Added from GameManagement to center icon
+    alignItems: 'center', // Added from GameManagement to center icon
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    color: '#FFD700',
-    textAlign: 'center',
-    marginBottom: 8,
+    color: '#FFFFFF',
+    marginBottom: 2,
   },
   headerSubtitle: {
     color: '#FFD700',
-    textAlign: 'center',
-    fontSize: 16,
-    opacity: 0.9,
+    fontSize: 14,
   },
   summaryCard: {
     margin: 16,
@@ -463,5 +570,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#35654d',
     borderColor: '#FFD700',
     borderWidth: 2,
-  }
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

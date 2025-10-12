@@ -29,6 +29,8 @@ interface StatCardProps {
   size?: 'small' | 'medium' | 'large';
   backgroundColor?: string;
   style?: any;
+  titleStyle?: any;
+  valueStyle?: any;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: number | string;
   suffix?: string;
@@ -74,6 +76,8 @@ const StatCard: React.FC<StatCardProps> = ({
   size = 'medium',
   backgroundColor,
   style,
+  titleStyle,
+  valueStyle,
   trend,
   trendValue,
   suffix = '',
@@ -225,7 +229,8 @@ const StatCard: React.FC<StatCardProps> = ({
         {title && (
           <Text style={[
             sizeStyles.title, 
-            alignRight ? styles.textRtl : {}
+            alignRight ? styles.textRtl : {},
+            titleStyle
           ]}>
             {title}
           </Text>
@@ -250,7 +255,8 @@ const StatCard: React.FC<StatCardProps> = ({
         <Text style={[
           sizeStyles.value, 
           { color: actualValueColor },
-          alignRight ? styles.textRtl : {}
+          alignRight ? styles.textRtl : {},
+          valueStyle
         ]}>
           {formatValue()}
         </Text>
@@ -360,7 +366,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   titleLarge: {
-    fontSize: 16,
+    fontSize: 14,
     color: CASINO_COLORS.textSecondary,
     fontWeight: '500',
     flexShrink: 1,
@@ -378,7 +384,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   valueLarge: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: 'bold',
     color: CASINO_COLORS.gold,
     flexShrink: 1,

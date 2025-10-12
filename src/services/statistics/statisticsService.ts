@@ -19,7 +19,6 @@ import { getAllUsers } from '@/services/users';
 import { getAllActiveGroups } from '@/services/groups';
 import gameDataManager from '../gameDataManager';
 import { store } from '@/store/AppStore';
-import { syncService } from '@/store/SyncService';
 import { formatShortDate, formatLongDate } from '@/utils/formatters/dateFormatter';
 import { formatCurrency } from '@/utils/formatters/currencyFormatter';
 import { 
@@ -28,10 +27,12 @@ import {
   calculateGamesWon,
   calculateWinPercentage,
   calculateAverageProfitPerGame,
+  calculatePlayerRankingByProfit,
   calculateTotalRebuys,
-  calculateAverageRebuysPerGame,
-  calculatePlayerRankingByProfit
-} from '@/utils/calculators/statisticsCalculator';
+  calculateAverageRebuysPerGame
+} from '@/calculations/legacy';
+import { getGameStatistics as importedGetGameStatistics } from './gameStatistics';
+import { GameStatisticsResponse } from './gameStatistics';
 
 // Cache for expensive operations
 interface CacheData {
@@ -57,28 +58,34 @@ export const fetchAllGames = async (skipCache: boolean = false): Promise<Game[]>
   try {
     console.log('statisticsService: מביא משחקים מהמאגר המרכזי');
     
-    // אם צריך לרענן את המטמון, נאלץ את שירות הסנכרון לרענן את הנתונים
+    // הסרנו את השימוש ב-syncService כדי למנוע Require cycle
+    // במקום זה נסתמך על המאגר המרכזי שמתעדכן על ידי AuthContext/SyncService
     if (skipCache) {
-      console.log('statisticsService: מאלץ רענון נתונים מהשרת');
-      await syncService.forceRefresh();
+      console.log('statisticsService: מבקש רענון נתונים (ללא syncService)');
+      // ננסה לטעון מ-store אפילו עם skipCache
     }
     
     // קבלת כל המשחקים מהמאגר המרכזי
     const allGames = store.getGames();
+    console.log(`statisticsService: התקבלו ${allGames.length} משחקים מהמאגר המרכזי`);
     
-    // אם אין משחקים במאגר או יש מעט מדי, ננסה לרענן בכל מקרה
+    // יותר מידע על המשחקים
+    if (allGames.length > 0) {
+      console.log('דוגמה למשחק ראשון:', {
+        id: allGames[0].id,
+        groupId: allGames[0].groupId,
+        status: allGames[0].status,
+        hasDate: !!allGames[0].date,
+        hasPlayers: !!allGames[0].players && allGames[0].players.length > 0,
+        createdAt: allGames[0].createdAt ? new Date(allGames[0].createdAt).toISOString() : 'לא נקבע',
+        playersCount: allGames[0].players?.length || 0
+      });
+    }
+    
+    // אם אין משחקים במאגר, נדווח על כך
     if (allGames.length === 0) {
-      console.log('statisticsService: אין משחקים במאגר המרכזי, מרענן נתונים');
-      await syncService.forceRefresh();
-      // מנסה שוב לקבל משחקים לאחר הרענון
-      const refreshedGames = store.getGames();
-      console.log(`statisticsService: לאחר רענון יש ${refreshedGames.length} משחקים במאגר המרכזי`);
-      
-      if (refreshedGames.length === 0) {
-        console.warn('statisticsService: גם לאחר רענון אין משחקים במאגר המרכזי');
-      }
-      
-      return refreshedGames;
+      console.log('statisticsService: אין משחקים במאגר המרכזי');
+      return [];
     }
     
     // מחזיר את כל המשחקים ללא סינון - כדי לאפשר הצגת משחקים בכל המצבים
@@ -118,11 +125,26 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
   let filteredGames = [...games];
   console.log(`filterGames: התחלת הסינון עם ${games.length} משחקים`);
   
+  // הדפסת מידע מורחב על סטטוסים של משחקים
+  const statusCounts: Record<string, number> = {};
+  games.forEach(game => {
+    const status = game.status || 'unknown';
+    statusCounts[status] = (statusCounts[status] || 0) + 1;
+  });
+  console.log('filterGames: פילוג סטטוסים של משחקים לפני סינון:', JSON.stringify(statusCounts));
+  
+  // בדיקה כמה משחקים יש עם שחקנים
+  const gamesWithPlayers = games.filter(game => game.players && game.players.length > 0).length;
+  const gamesWithoutPlayers = games.length - gamesWithPlayers;
+  console.log(`filterGames: מתוך ${games.length} משחקים, ${gamesWithPlayers} עם שחקנים, ${gamesWithoutPlayers} ללא שחקנים`);
+  
   // נתוני סינון
   console.log(`filterGames: פרמטרי סינון:`, 
                `timeFilter=${filter.timeFilter || 'all'}`,
                `groupId=${filter.groupId || 'all'}`,
-               `playerId=${filter.playerId || 'all'}`);
+               `playerId=${filter.playerId || 'all'}`,
+               `includeAllStatuses=${filter.includeAllStatuses || false}`,
+               `סטטוסים=${filter.statuses ? filter.statuses.join(',') : 'ברירת מחדל'}`);
   
   // Filter by status (only completed games, unless otherwise specified)
   if (filter.statuses) {
@@ -137,8 +159,20 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
     filteredGames = filteredGames.filter(game => 
       validStatuses.includes(game.status || '')
     );
+  } else {
+    console.log('filterGames: כולל את כל הסטטוסים, אין סינון לפי סטטוס');
   }
   console.log(`filterGames: לאחר סינון סטטוס נשארו ${filteredGames.length} משחקים`);
+  
+  // מידע על משחקים אחרי סינון סטטוס
+  if (filteredGames.length > 0) {
+    const filteredStatusCounts: Record<string, number> = {};
+    filteredGames.forEach(game => {
+      const status = game.status || 'unknown';
+      filteredStatusCounts[status] = (filteredStatusCounts[status] || 0) + 1;
+    });
+    console.log('filterGames: פילוג סטטוסים אחרי סינון סטטוס:', JSON.stringify(filteredStatusCounts));
+  }
   
   // Filter by group
   if (filter.groupId) {
@@ -159,19 +193,20 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
     console.log(`filterGames: לאחר סינון שחקן נשארו ${filteredGames.length} משחקים`);
   }
   
+  // בדיקת תקינות - כמה מהמשחקים אחרי הסינון יש להם תאריך
+  const gamesWithDate = filteredGames.filter(game => game.date).length;
+  const gamesWithoutDate = filteredGames.length - gamesWithDate;
+  console.log(`filterGames: מתוך ${filteredGames.length} משחקים אחרי סינון, ${gamesWithDate} עם תאריך, ${gamesWithoutDate} ללא תאריך`);
+  
   // הדפסת פרטי כל המשחקים לצורך דיבוג אם יש מעט משחקים
   if (filteredGames.length > 0 && filteredGames.length < 10) {
     console.log("--------- פרטי משחקים לפני סינון זמן ---------");
     filteredGames.forEach((game, index) => {
-      if (game.date) {
-        const gameDate = `${game.date.day}/${game.date.month}/${game.date.year}`;
-        const status = game.status || 'ללא סטטוס';
-        const playersCount = game.players?.length || 0;
-        const openGamesCount = game.openGames?.length || 0;
-        console.log(`משחק ${index + 1}: תאריך=${gameDate}, סטטוס=${status}, מזהה=${game.id}, קבוצה=${game.groupId}, שם קבוצה=${game.groupNameSnapshot || 'לא ידוע'}, מספר שחקנים=${playersCount}, מספר משחקים פתוחים=${openGamesCount}`);
-      } else {
-        console.log(`משחק ${index + 1}: אין תאריך, מזהה=${game.id}, קבוצה=${game.groupId}, נוצר ב-${new Date(game.createdAt).toISOString()}`);
-      }
+      const dateInfo = game.date 
+        ? `תאריך=${game.date.day}/${game.date.month}/${game.date.year}`
+        : `אין תאריך, נוצר=${game.createdAt ? new Date(game.createdAt).toLocaleString() : 'לא ידוע'}`;
+      
+      console.log(`משחק ${index + 1}: ${dateInfo}, סטטוס=${game.status || 'ללא סטטוס'}, מזהה=${game.id}, קבוצה=${game.groupId}, שחקנים=${game.players?.length || 0}`);
     });
     console.log("-----------------------------------------------");
   }
@@ -189,21 +224,24 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
     
     switch (filter.timeFilter) {
       case 'month':
-        // "חודש אחרון" = 30 יום אחורה מתאריך המערכת
-        cutoffDate.setDate(now.getDate() - 30);
-        console.log(`filterGames: תאריך סף עבור 30 ימים אחרונים: ${cutoffDate.toISOString()}`);
-        endDate = now; // תאריך הסיום הוא תאריך המערכת
+        // חודש אחרון = 30 יום אחורה מתאריך המערכת
+        cutoffDate = new Date(now);
+        cutoffDate.setMonth(now.getMonth() - 1);
+        console.log(`filterGames: תאריך סף עבור חודש אחרון: ${cutoffDate.toISOString()}`);
+        endDate = now;
         break;
       case 'quarter':
-        // "רבעון אחרון" = 90 יום אחורה מתאריך המערכת
-        cutoffDate.setDate(now.getDate() - 90);
-        console.log(`filterGames: תאריך סף עבור 90 ימים אחרונים: ${cutoffDate.toISOString()}`);
+        // רבעון אחרון = 3 חודשים אחורה מתאריך המערכת
+        cutoffDate = new Date(now);
+        cutoffDate.setMonth(now.getMonth() - 3);
+        console.log(`filterGames: תאריך סף עבור רבעון אחרון: ${cutoffDate.toISOString()}`);
         endDate = now;
         break;
       case 'year':
-        // "שנה אחרונה" = 365 יום אחורה מתאריך המערכת
-        cutoffDate.setDate(now.getDate() - 365);
-        console.log(`filterGames: תאריך סף עבור 365 ימים אחרונים: ${cutoffDate.toISOString()}`);
+        // שנה אחרונה = שנה אחורה מתאריך המערכת
+        cutoffDate = new Date(now);
+        cutoffDate.setFullYear(now.getFullYear() - 1);
+        console.log(`filterGames: תאריך סף עבור שנה אחרונה: ${cutoffDate.toISOString()}`);
         endDate = now;
         break;
       case 'custom':
@@ -220,6 +258,7 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
     }
     
     // סינון המשחקים לפי התאריך
+    const originalCount = filteredGames.length;
     filteredGames = filteredGames.filter(game => {
       let gameDate: Date;
       let usedField = '';
@@ -246,33 +285,18 @@ export const filterGames = (games: Game[], filter: StatisticsFilter): Game[] => 
       
       // בדיקה האם התאריך בטווח המבוקש
       const isInRange = gameDate >= cutoffDate && (!endDate || gameDate <= endDate);
-      const openGamesCount = game.openGames?.length || 0;
-      
-      console.log(`filterGames: בודק משחק ${game.id || 'ללא מזהה'}, תאריך ${usedField}, קבוצה=${game.groupId}, מספר משחקים פתוחים=${openGamesCount}, יעבור סינון: ${isInRange}`);
-      
       return isInRange;
     });
     
-    console.log(`filterGames: לאחר סינון זמן נשארו ${filteredGames.length} משחקים`);
+    console.log(`filterGames: לאחר סינון זמן נשארו ${filteredGames.length} משחקים מתוך ${originalCount}`);
     
-    // הדפסת פרטי המשחקים שנותרו אחרי סינון לצורך דיבוג
-    if (filteredGames.length > 0) {
-      console.log("--------- פרטי משחקים לאחר סינון זמן ---------");
-      let totalOpenGames = 0;
-      filteredGames.forEach((game, index) => {
-        if (game.date) {
-          const gameDate = `${game.date.day}/${game.date.month}/${game.date.year}`;
-          const openGamesCount = game.openGames?.length || 0;
-          totalOpenGames += openGamesCount;
-          console.log(`משחק ${index + 1}: תאריך=${gameDate}, מזהה=${game.id}, מספר משחקים פתוחים=${openGamesCount}`);
-        } else {
-          const openGamesCount = game.openGames?.length || 0;
-          totalOpenGames += openGamesCount;
-          console.log(`משחק ${index + 1}: אין תאריך, מזהה=${game.id}, נוצר ב-${new Date(game.createdAt).toISOString()}, מספר משחקים פתוחים=${openGamesCount}`);
-        }
-      });
-      console.log(`סה"כ משחקים פתוחים בתקופה: ${totalOpenGames}`);
-      console.log("-----------------------------------------------");
+    // הדפסת סיכום אחרי סינון זמן
+    if (filteredGames.length === 0) {
+      console.warn('filterGames: לא נשארו משחקים אחרי סינון זמן!');
+    } else {
+      // בדיקה כמה מהמשחקים הסופיים יש להם שחקנים
+      const gamesWithPlayersAfterFiltering = filteredGames.filter(game => game.players && game.players.length > 0).length;
+      console.log(`filterGames: מתוך ${filteredGames.length} משחקים סופיים, ${gamesWithPlayersAfterFiltering} עם שחקנים`);
     }
   }
   
@@ -371,7 +395,7 @@ export const getGameStatsSummary = async (filter: StatisticsFilter, skipCache: b
  * Get basic statistics summary
  */
 export const getStatsSummary = async (filter: StatisticsFilter = { timeFilter: 'all' }): Promise<GameStatsSummary> => {
-  console.log("הפעלת פונקציית getStatsSummary - נכנסים למסך הסטטיסטיקה");
+  console.log("הפעלת פונקציית getStatsSummary - נכנסים למסך הסטטיסטיקה", filter);
   
   // קורא לפונקציית הלוג שלנו
   await logAllGames();
@@ -386,8 +410,32 @@ export const getStatsSummary = async (filter: StatisticsFilter = { timeFilter: '
       return cachedData.data;
     }
     
+    console.log('getStatsSummary: מביא את כל המשחקים');
     const allGames = await fetchAllGames();
+    console.log(`getStatsSummary: התקבלו ${allGames.length} משחקים`);
+    
+    console.log('getStatsSummary: מסנן משחקים');
     const filteredGames = filterGames(allGames, filter);
+    console.log(`getStatsSummary: נשארו ${filteredGames.length} משחקים אחרי סינון`);
+    
+    if (filteredGames.length === 0) {
+      console.warn("getStatsSummary: אין משחקים אחרי סינון - מחזיר ערכי ברירת מחדל");
+      const emptySummary: GameStatsSummary = {
+        totalGames: 0,
+        totalMoney: 0,
+        totalPlayers: 0,
+        totalRebuys: 0,
+        averagePlayersPerGame: 0
+      };
+      
+      // נשמור במטמון כדי למנוע קריאות חוזרות
+      statsCache.set(cacheKey, {
+        data: emptySummary,
+        timestamp: Date.now()
+      });
+      
+      return emptySummary;
+    }
     
     // Set of unique player IDs across all games
     const uniquePlayers = new Set<string>();
@@ -398,6 +446,8 @@ export const getStatsSummary = async (filter: StatisticsFilter = { timeFilter: '
     let maxPlayers = 0;
     let minPlayers = Infinity;
     let totalPlayers = 0;
+    
+    console.log('getStatsSummary: מחשב סטטיסטיקות מהמשחקים המסוננים');
     
     filteredGames.forEach(game => {
       // Count unique players
@@ -451,6 +501,8 @@ export const getStatsSummary = async (filter: StatisticsFilter = { timeFilter: '
         Math.round(totalDuration / gamesWithDuration) : undefined
     };
     
+    console.log('getStatsSummary: סיום חישוב סטטיסטיקות:', summary);
+    
     // Cache the result
     statsCache.set(cacheKey, {
       data: summary,
@@ -466,130 +518,50 @@ export const getStatsSummary = async (filter: StatisticsFilter = { timeFilter: '
 
 /**
  * Get detailed game statistics including monthly data
+ * מייצא מחדש את הפונקציה המיובאת מהקובץ gameStatistics.ts
  */
-export const getGameStatistics = async (
-  filter: StatisticsFilter = { timeFilter: 'all' }
-): Promise<{
-  monthlyStats: { month: string; games: number; money: number }[];
-  groupStats?: { name: string; games: number; totalMoney: number }[];
-  averagePlayersPerGame: number;
-  buyInRebuyRatio: number;
-}> => {
+export const getGameStatistics = async (filter: StatisticsFilter = { timeFilter: 'all' }) => {
+  console.log('📊 statisticsService.getGameStatistics: נקראה עם פילטר -', filter);
+  
   try {
-    // Create a cache key based on filter
-    const cacheKey = `gameStats_${JSON.stringify(filter)}`;
-    const cachedData = statsCache.get(cacheKey);
+    console.log('📊 statisticsService: קורא לפונקציה importedGetGameStatistics מקובץ gameStatistics.ts');
+    const result = await importedGetGameStatistics(filter);
     
-    if (cachedData && (Date.now() - cachedData.timestamp < CACHE_EXPIRY)) {
-      console.log('Using cached game stats data');
-      return cachedData.data;
+    if (!result) {
+      console.error('❌ statisticsService.getGameStatistics: הפונקציה importedGetGameStatistics החזירה ערך ריק');
+      throw new Error('לא התקבלו נתונים מהשירות');
     }
     
-    const allGames = await fetchAllGames();
-    const filteredGames = filterGames(allGames, filter);
-    
-    // Monthly statistics
-    const monthlyStatsMap = new Map<string, { games: number; money: number }>();
-    
-    // Group statistics (only if not filtering by specific group)
-    const groupStatsMap = new Map<string, { name: string; games: number; totalMoney: number }>();
-    
-    // Track total players for average calculation
-    let totalPlayers = 0;
-    let totalBuyIns = 0;
-    let totalRebuys = 0;
-    
-    // Process each game
-    filteredGames.forEach(game => {
-      // Process date for monthly stats
-      const date = game.date;
-      let monthKey = 'unknown';
-      
-      if (date && typeof date.month === 'number' && typeof date.year === 'number') {
-        monthKey = `${String(date.month).padStart(2, '0')}/${date.year}`;
-      } else if (game.createdAt) {
-        const createdDate = new Date(game.createdAt);
-        monthKey = `${String(createdDate.getMonth() + 1).padStart(2, '0')}/${createdDate.getFullYear()}`;
-      }
-      
-      // Update monthly stats
-      const existingMonthStats = monthlyStatsMap.get(monthKey) || { games: 0, money: 0 };
-      existingMonthStats.games += 1;
-      
-      // Track group stats if not filtering by specific group
-      if (!filter.groupId && game.groupId && game.groupNameSnapshot) {
-        const existingGroupStats = groupStatsMap.get(game.groupId) || { 
-          name: game.groupNameSnapshot,
-          games: 0,
-          totalMoney: 0
-        };
-        existingGroupStats.games += 1;
-        
-        // Update group stats
-        groupStatsMap.set(game.groupId, existingGroupStats);
-      }
-      
-      // Calculate money and track players
-      let gameMoney = 0;
-      game.players?.forEach(player => {
-        const buyInCount = player.buyInCount || 0;
-        const rebuyCount = player.rebuyCount || 0;
-        
-        const buyInTotal = buyInCount * 
-          ((game.buyInSnapshot && game.buyInSnapshot.amount) || 0);
-        const rebuyTotal = rebuyCount * 
-          ((game.rebuySnapshot && game.rebuySnapshot.amount) || 0);
-          
-        gameMoney += buyInTotal + rebuyTotal;
-        
-        totalBuyIns += buyInCount;
-        totalRebuys += rebuyCount;
-      });
-      
-      // Update monthly money
-      existingMonthStats.money += gameMoney;
-      monthlyStatsMap.set(monthKey, existingMonthStats);
-      
-      // Update group money if tracking groups
-      if (!filter.groupId && game.groupId) {
-        const groupStats = groupStatsMap.get(game.groupId);
-        if (groupStats) {
-          groupStats.totalMoney += gameMoney;
-        }
-      }
-      
-      // Track total players
-      totalPlayers += game.players?.length || 0;
-    });
-    
-    // Convert map to array for monthly stats
-    const monthlyStats = Array.from(monthlyStatsMap.entries()).map(([month, stats]) => ({
-      month,
-      games: stats.games,
-      money: stats.money
-    }));
-    
-    // Convert map to array and sort by games count for group stats
-    const groupStats = Array.from(groupStatsMap.values())
-      .sort((a, b) => b.games - a.games);
-    
-    const result = {
-      monthlyStats,
-      groupStats: !filter.groupId ? groupStats : undefined,
-      averagePlayersPerGame: filteredGames.length > 0 ? totalPlayers / filteredGames.length : 0,
-      buyInRebuyRatio: totalBuyIns > 0 ? totalRebuys / totalBuyIns : 0
-    };
-    
-    // Cache the result
-    statsCache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now()
-    });
+    console.log('📊 statisticsService: בדיקת מבנה התוצאה שהתקבלה:');
+    console.log('  - monthlyStats:', result.monthlyStats ? `יש ${result.monthlyStats.length} פריטים` : 'חסר');
+    console.log('  - totalGames:', result.totalGames !== undefined ? result.totalGames : 'חסר');
+    console.log('  - activePlayers:', result.activePlayers !== undefined ? result.activePlayers : 'חסר');
+    console.log('  - averagePlayersPerGame:', result.averagePlayersPerGame !== undefined ? result.averagePlayersPerGame : 'חסר');
     
     return result;
   } catch (error) {
-    console.error('Error getting game statistics:', error);
-    throw error;
+    console.error('❌ statisticsService.getGameStatistics: שגיאה -', error);
+    
+    // במקרה של שגיאה, נחזיר אובייקט עם ערכי ברירת מחדל כדי שהממשק לא יקרוס
+    const defaultResponse: GameStatisticsResponse = {
+      monthlyStats: [],
+      playerDistribution: [],
+      gameByDayOfWeek: [],
+      rebuyDistribution: [],
+      investmentDistribution: [],
+      averagePlayersPerGame: 0,
+      topGames: [],
+      totalGames: 0,
+      activePlayers: 0,
+      totalRebuys: 0,
+      totalMoney: 0,
+      averageRebuysPerGame: 0,
+      averageMoneyPerGame: 0,
+      averageMoneyPerPlayer: 0
+    };
+    
+    console.log('📊 statisticsService: מחזיר ערכי ברירת מחדל עקב שגיאה');
+    return defaultResponse;
   }
 };
 
@@ -614,6 +586,17 @@ export const getTopPlayers = async (
     const filteredGames = filterGames(allGames, filter);
     const allUsers = await getAllUsers();
     
+    // קבלת השחקנים הקבועים של הקבוצה אם יש סינון לפי קבוצה
+    let permanentPlayersInGroup: Set<string> | null = null;
+    if (filter.groupId && filter.groupId !== 'all') {
+      const allGroups = await getAllActiveGroups();
+      const group = allGroups.find(g => g.id === filter.groupId);
+      if (group && group.permanentPlayers) {
+        permanentPlayersInGroup = new Set(group.permanentPlayers);
+        console.log(`getTopPlayers: מסנן לפי קבוצה ${group.name}, שחקנים קבועים: ${group.permanentPlayers.length}`);
+      }
+    }
+    
     // Map to track accumulated stats for each player
     const playerStatsMap = new Map<string, PlayerStats>();
     
@@ -622,6 +605,11 @@ export const getTopPlayers = async (
       game.players?.forEach(player => {
         const playerId = player.userId || player.id;
         if (!playerId) return;
+        
+        // אם יש סינון לפי קבוצה, כלול רק שחקנים קבועים
+        if (permanentPlayersInGroup && !permanentPlayersInGroup.has(playerId)) {
+          return; // דלג על שחקן שאינו קבוע בקבוצה
+        }
         
         const playerName = player.name || 
           allUsers.find(u => u.id === playerId)?.name || 
@@ -757,24 +745,36 @@ export const getGroupStatistics = async (
       // Skip if no games
       if (groupGames.length === 0) continue;
       
-      // Count player frequency
+      // קבלת השחקנים הקבועים של הקבוצה
+      const permanentPlayersInGroup = new Set(group.permanentPlayers || []);
+      console.log(`getGroupStatistics: מעבד קבוצה ${group.name}, שחקנים קבועים: ${permanentPlayersInGroup.size}`);
+      
+      // Count player frequency - only permanent players
       const playerFrequency = new Map<string, number>();
       let totalPlayers = 0;
       
       groupGames.forEach(game => {
-        const playerCount = game.players?.length || 0;
-        totalPlayers += playerCount;
+        // Count only permanent players for this game
+        let permanentPlayersInThisGame = 0;
         
         game.players?.forEach(player => {
           const playerId = player.userId || player.id;
           if (!playerId) return;
           
+          // כלול רק שחקנים קבועים בקבוצה
+          if (!permanentPlayersInGroup.has(playerId)) {
+            return; // דלג על שחקן שאינו קבוע בקבוצה
+          }
+          
+          permanentPlayersInThisGame++;
           const count = playerFrequency.get(playerId) || 0;
           playerFrequency.set(playerId, count + 1);
         });
+        
+        totalPlayers += permanentPlayersInThisGame;
       });
       
-      // Get most frequent players
+      // Get most frequent players (only permanent players)
       const frequentPlayers = Array.from(playerFrequency.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
@@ -790,7 +790,7 @@ export const getGroupStatistics = async (
           };
         });
       
-      // Calculate total money
+      // Calculate total money (from all players, but count will reflect permanent players focus)
       let totalMoney = 0;
       groupGames.forEach(game => {
         game.players?.forEach(player => {
@@ -802,7 +802,7 @@ export const getGroupStatistics = async (
       
       // Find last game date
       const lastGame = groupGames[0]; // Assuming already sorted by date
-      const lastGameDate = formatGameDate(lastGame.date);
+      const lastGameDate = formatGameDate((lastGame as any).gameDate || lastGame.date);
       
       // Create group stats
       const groupStats: GroupStats = {
@@ -972,6 +972,24 @@ export const logAllGames = async (): Promise<void> => {
       return;
     }
     
+    console.log(`נמצאו ${allGames.length} משחקים במערכת`);
+    
+    // פילוג לפי סטטוס
+    const statusCounts: Record<string, number> = {};
+    allGames.forEach(game => {
+      const status = game.status || 'unknown';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    console.log('פילוג לפי סטטוס:', statusCounts);
+    
+    // פילוג לפי קבוצה
+    const groupCounts: Record<string, number> = {};
+    allGames.forEach(game => {
+      const groupId = game.groupId || 'unknown';
+      groupCounts[groupId] = (groupCounts[groupId] || 0) + 1;
+    });
+    console.log('פילוג לפי קבוצה:', groupCounts);
+    
     allGames.forEach((game, index) => {
       const dateStr = game.date 
         ? `${game.date.day}/${game.date.month}/${game.date.year}` 
@@ -986,6 +1004,7 @@ export const logAllGames = async (): Promise<void> => {
         `קבוצה=${game.groupId}, ` + 
         `שם קבוצה=${game.groupNameSnapshot || 'לא ידוע'}, ` +
         `תאריך=${dateStr}, ` +
+        `סטטוס=${game.status || 'לא ידוע'}, ` +
         `מספר שחקנים=${playersCount}, ` +
         `מספר משחקים פתוחים=${openGamesCount}`
       );

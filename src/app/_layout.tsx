@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
 import { TouchableOpacity, Text, View } from 'react-native';
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
+import { GameProvider } from '@/contexts/GameContext';
 import { useColorScheme } from '../../src/components/useColorScheme';
 import Colors from '@/theme/colors';
 import { migrateGameDates } from '@/services/migrations';
@@ -72,10 +73,12 @@ export default function RootLayout() {
     return null;
   }
 
-  // Wrap the entire app with AuthProvider
+  // Wrap the entire app with AuthProvider and GameProvider
   return (
     <AuthProvider>
+      <GameProvider>
       <RootLayoutNav />
+      </GameProvider>
     </AuthProvider>
   );
 }
@@ -134,6 +137,24 @@ function RootLayoutNav() {
           options={{ 
             headerShown: false,
             animation: 'fade'
+          }}
+        />
+        
+        {/* מסכי היסטוריה */}
+        <Stack.Screen 
+          name="history" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right'
+          }}
+        />
+        
+        {/* מסכי סטטיסטיקות */}
+        <Stack.Screen 
+          name="statistics" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right'
           }}
         />
 

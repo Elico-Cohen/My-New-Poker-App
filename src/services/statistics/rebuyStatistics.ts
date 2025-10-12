@@ -15,10 +15,13 @@ export const getRebuyStatistics = async (
   filter: StatisticsFilter = { timeFilter: 'all' }
 ): Promise<RebuyStats> => {
   try {
+    console.log('===== התחלת חישוב סטטיסטיקות ריבאיים =====');
     console.log('RebuyStatistics: מביא נתונים מהמאגר המרכזי');
+    console.log('RebuyStatistics: פילטר שהתקבל:', JSON.stringify(filter));
     
     // קבלת נתונים מהמאגר המרכזי במקום מפיירבייס ישירות
     const allGames = store.getGames();
+    console.log(`RebuyStatistics: מספר משחקים שהתקבלו מהמאגר: ${allGames.length}`);
     
     // סינון משחקים רק לפי הקריטריונים הרלוונטיים
     // אנחנו רוצים גם משחקים במצב "final_results" וגם "completed"
@@ -26,9 +29,72 @@ export const getRebuyStatistics = async (
       ...filter,
       statuses: ['completed', 'final_results']
     });
+    console.log(`RebuyStatistics: מספר משחקים אחרי סינון: ${filteredGames.length}`);
+    
+    if (filteredGames.length === 0) {
+      console.warn('RebuyStatistics: לא נמצאו משחקים שעומדים בקריטריוני הסינון!');
+      // במקרה שאין משחקים, נחזיר אובייקט ריק עם ערכים אפסיים
+      return {
+        totalRebuys: 0,
+        totalPurchases: 0,
+        averageRebuysPerGame: 0,
+        averageRebuysPerPlayer: 0,
+        averagePurchasesPerPlayer: 0,
+        gamesCount: 0,
+        groupsRebuyStats: [],
+        playerWithMostRebuys: {} as any,
+        playerWithMostTotalRebuys: {} as any,
+        playerWithLeastTotalRebuys: {} as any,
+        playerWithLowestRebuyAverage: {} as any,
+        playerWithHighestTotalPurchases: {} as any,
+        playerWithLowestTotalPurchases: {} as any,
+        playerWithHighestSingleGamePurchase: {} as any,
+        playerWithLargestSingleGameDifference: {} as any,
+        playerWithLargestCumulativeDifference: {} as any,
+        gameWithMostRebuys: {} as any,
+        gameWithLeastRebuys: {} as any,
+        gameWithMostPurchases: {} as any,
+        gameWithLeastPurchases: {} as any
+      };
+    }
     
     const allUsers = store.getUsers();
+    console.log(`RebuyStatistics: מספר משתמשים שהתקבלו מהמאגר: ${allUsers.length}`);
+    
     const allGroups = store.getGroups();
+    console.log(`RebuyStatistics: מספר קבוצות שהתקבלו מהמאגר: ${allGroups.length}`);
+    
+    // קבלת השחקנים הקבועים של הקבוצה אם יש סינון לפי קבוצה
+    let permanentPlayersInGroup: Set<string> | null = null;
+    if (filter.groupId && filter.groupId !== 'all') {
+      const group = allGroups.find(g => g.id === filter.groupId);
+      if (group && group.permanentPlayers) {
+        permanentPlayersInGroup = new Set(group.permanentPlayers);
+        console.log(`RebuyStatistics: מסנן לפי קבוצה ${group.name}, שחקנים קבועים: ${group.permanentPlayers.length}`);
+      }
+    }
+    
+    // בדיקה האם קיימים שדות חיוניים במשחקים
+    const gamesSample = filteredGames.slice(0, Math.min(5, filteredGames.length));
+    console.log('RebuyStatistics: דוגמת משחקים למבנה נתונים:');
+    
+    gamesSample.forEach((game, idx) => {
+      console.log(`\nRebuyStatistics: משחק לדוגמה #${idx + 1}:`);
+      console.log(`- מזהה: ${game.id}`);
+      console.log(`- תאריך: ${formatGameDate(game.date)}`);
+      console.log(`- סטטוס: ${game.status}`);
+      console.log(`- מספר שחקנים: ${game.players ? game.players.length : 'לא קיים'}`);
+      
+      // בדיקת מבנה שחקן
+      if (game.players && game.players.length > 0) {
+        const playerSample = game.players[0];
+        console.log('- דוגמת שחקן:');
+        console.log(`  - שם: ${playerSample.name}`);
+        console.log(`  - מזהה: ${playerSample.userId}`);
+        console.log(`  - מספר ריבאיים: ${playerSample.rebuyCount !== undefined ? playerSample.rebuyCount : 'לא קיים'}`);
+        console.log(`  - מספר באי-אין: ${playerSample.buyInCount !== undefined ? playerSample.buyInCount : 'לא קיים'}`);
+      }
+    });
     
     console.log(`RebuyStatistics: מעבד ${filteredGames.length} משחקים עבור סטטיסטיקת ריבאיים`);
     
@@ -63,6 +129,18 @@ export const getRebuyStatistics = async (
       return groupCache.get(groupId) || { buyInAmount: 0, rebuyAmount: 0 };
     };
     
+    // פונקציה לבדיקה האם שחקן צריך להיכלל בחישובים
+    const shouldIncludePlayer = (playerId: string, playerName: string): boolean => {
+      // אם אין סינון לפי קבוצה, כלול את כל השחקנים
+      if (!permanentPlayersInGroup) {
+        return true;
+      }
+      
+      // אם יש סינון לפי קבוצה, כלול רק שחקנים קבועים
+      const playerIdToCheck = playerId || nameToIdMap.get(playerName || '');
+      return permanentPlayersInGroup.has(playerIdToCheck || '');
+    };
+    
     // לוג מפורט של הריבאיים של כל שחקן בכל משחק
     filteredGames.forEach((game, gameIndex) => {
       console.log(`\nמשחק #${gameIndex + 1} - מזהה: ${game.id}, תאריך: ${formatGameDate(game.date)}`);
@@ -76,11 +154,17 @@ export const getRebuyStatistics = async (
       game.players.forEach((player, playerIndex) => {
         const rebuyCount = player.rebuyCount || 0;
         const buyInCount = player.buyInCount || 0;
-        const playerId = player.userId || nameToIdMap.get(player.name || '');
-        const playerName = player.name || 
-          allUsers.find(u => u.id === playerId)?.name ||
-          'לא ידוע';
-          
+        const playerName = player.name || '';
+        const playerId = player.userId || nameToIdMap.get(playerName) || '';
+        
+        if (!playerName) return; // דלג על שחקנים ללא שם
+        
+        // בדיקה האם השחקן צריך להיכלל בחישובים (רק שחקנים קבועים בקבוצה)
+        if (!shouldIncludePlayer(playerId, playerName)) {
+          console.log(`RebuyStatistics: מדלג על שחקן אורח ${playerName} (${playerId}) בקבוצה מסוננת`);
+          return;
+        }
+        
         console.log(`  ${playerIndex + 1}. ${playerName} (${playerId || 'לא מזוהה'}) - ריבאיים: ${rebuyCount}, באי-אין: ${buyInCount}`);
       });
     });
@@ -91,6 +175,23 @@ export const getRebuyStatistics = async (
     let totalGamesWithRebuys = 0;
     let totalPlayers = 0;
     let totalParticipants = 0;
+    let gamesCount = filteredGames.length; // מספר המשחקים הכולל
+    
+    // מעקב אחרי מספר המשחקים לכל קבוצה
+    const groupGamesCountMap = new Map<string, number>();
+
+    // אתחול מונה משחקים לכל קבוצה
+    allGroups.forEach(group => {
+      groupGamesCountMap.set(group.id, 0);
+    });
+
+    // ספירת משחקים לכל קבוצה
+    filteredGames.forEach(game => {
+      if (game.groupId) {
+        const currentCount = groupGamesCountMap.get(game.groupId) || 0;
+        groupGamesCountMap.set(game.groupId, currentCount + 1);
+      }
+    });
     
     // Track player and game rebuy counts - משתמש בשם ובמזהה השחקן כמפתח משולב
     const playerRebuyMap = new Map<string, {
@@ -131,6 +232,7 @@ export const getRebuyStatistics = async (
       groupName: string;
       totalRebuys: number;
       totalPurchases: number;
+      gamesCount: number;
     }>();
     
     // אתחול סטטיסטיקות הקבוצה עבור כל הקבוצות
@@ -139,7 +241,8 @@ export const getRebuyStatistics = async (
         groupId: group.id,
         groupName: group.name,
         totalRebuys: 0,
-        totalPurchases: 0
+        totalPurchases: 0,
+        gamesCount: groupGamesCountMap.get(group.id) || 0
       });
     });
     
@@ -292,7 +395,8 @@ export const getRebuyStatistics = async (
           groupId: game.groupId,
           groupName: game.groupNameSnapshot || 'קבוצה לא ידועה',
           totalRebuys: 0,
-          totalPurchases: 0
+          totalPurchases: 0,
+          gamesCount: groupGamesCountMap.get(game.groupId) || 0
         };
         groupRebuyStatsMap.set(game.groupId, groupStats);
       }
@@ -307,6 +411,12 @@ export const getRebuyStatistics = async (
         const playerId = player.userId || nameToIdMap.get(playerName) || '';
         
         if (!playerName) return; // דלג על שחקנים ללא שם
+        
+        // בדיקה האם השחקן צריך להיכלל בחישובים (רק שחקנים קבועים בקבוצה)
+        if (!shouldIncludePlayer(playerId, playerName)) {
+          console.log(`RebuyStatistics: מדלג על שחקן אורח ${playerName} (${playerId}) בקבוצה מסוננת`);
+          return;
+        }
         
         // מפתח ייחודי לשחקן - שם + מזהה אם קיים
         const playerKey = playerId ? `${playerName}-${playerId}` : playerName;
@@ -427,7 +537,7 @@ export const getRebuyStatistics = async (
             playerId,
             playerName,
             gameId: game.id,
-            date: formatGameDate(game.date),
+            date: formatGameDate((game as any).gameDate || game.date),
             purchaseAmount: totalPurchase,
             finalResult: finalResultMoney,
             difference
@@ -453,7 +563,7 @@ export const getRebuyStatistics = async (
         playerWithHighestSingleGamePurchase = {
           ...highestPurchaseInCurrentGame,
           gameId: game.id,
-          date: formatGameDate(game.date)
+          date: formatGameDate((game as any).gameDate || game.date)
         };
       }
       
@@ -477,11 +587,11 @@ export const getRebuyStatistics = async (
           
           gameWithMostRebuys = {
             gameId: game.id,
-            date: formatGameDate(game.date),
+            date: formatGameDate((game as any).gameDate || game.date),
             rebuyCount: gameRebuyCount,
             playersCount: game.players.length,
-            groupName,
-            topRebuyPlayers
+            groupName: groupName,
+            topRebuyPlayers: topRebuyPlayers
           };
         }
 
@@ -502,11 +612,11 @@ export const getRebuyStatistics = async (
             
             gameWithLeastRebuys = {
               gameId: game.id,
-              date: formatGameDate(game.date),
+              date: formatGameDate((game as any).gameDate || game.date),
               rebuyCount: gameRebuyCount,
               playersCount: game.players.length,
-              groupName,
-              topRebuyPlayers
+              groupName: groupName,
+              topRebuyPlayers: topRebuyPlayers
             };
         }
       }
@@ -528,7 +638,7 @@ export const getRebuyStatistics = async (
         
         gameWithMostPurchases = {
           gameId: game.id,
-          date: formatGameDate(game.date),
+          date: formatGameDate((game as any).gameDate || game.date),
           purchaseAmount: gameTotalPurchases,
           playersCount: game.players.length,
           groupName,
@@ -553,7 +663,7 @@ export const getRebuyStatistics = async (
         
         gameWithLeastPurchases = {
           gameId: game.id,
-          date: formatGameDate(game.date),
+          date: formatGameDate((game as any).gameDate || game.date),
           purchaseAmount: gameTotalPurchases,
           playersCount: game.players.length,
           groupName,
@@ -788,13 +898,57 @@ export const getRebuyStatistics = async (
     // המרת מיפוי הקבוצות למערך לצורך החזרה
     const groupsRebuyStats = Array.from(groupRebuyStatsMap.values());
     
-    return {
+    // הוספת לוג בסוף הפונקציה לפני החזרת התוצאות
+    // כאן נמצא הקוד המקורי שמחזיר את תוצאות החישוב:
+    // Add at the end of the function just before the return statement:
+    // השורות הבאות יתווספו בסוף הפונקציה, ממש לפני ה-return
+
+    // הוספת לוג של מספר קטן של נתונים מרכזיים
+    try {
+      const result = {
+        // השורות הבאות יתווספו בסוף הפונקציה, ממש לפני ה-return
+        totalRebuys,
+        totalPurchases,
+        averageRebuysPerGame,
+        averageRebuysPerPlayer,
+        averagePurchasesPerPlayer: totalParticipants > 0 ? totalPurchases / totalParticipants : 0,
+        gamesCount, // הוספת מספר המשחקים הכולל
+        // הוספת בדיקה האם קיימים נתוני שיאנים
+        hasMostRebuyPlayer: !!playerWithMostRebuys?.playerName,
+        hasMostTotalRebuyPlayer: !!playerWithMostTotalRebuys?.playerName,
+        // מספר אובייקטים במערך קבוצות
+        groupsCount: groupsRebuyStats?.length || 0
+      };
+      
+      console.log('RebuyStatistics: סיכום נתונים מרכזיים:', JSON.stringify(result));
+    } catch (logError) {
+      console.error('RebuyStatistics: שגיאה בלוג הסיכום:', logError);
+    }
+    
+    // בדיקת קיום שדות חיוניים לפני החזרה
+    if (!totalRebuys && totalRebuys !== 0) {
+      console.warn('RebuyStatistics: חסר נתון חיוני - totalRebuys');
+    }
+    
+    // בדיקת תקינות המבנה של gameWithMostRebuys
+    if (!gameWithMostRebuys || !gameWithMostRebuys.gameId) {
+      console.warn('RebuyStatistics: חסר או לא תקין - gameWithMostRebuys');
+    }
+    
+    // בדיקת תקינות המבנה של playerWithMostRebuys
+    if (!playerWithMostRebuys || !playerWithMostRebuys.playerName) {
+      console.warn('RebuyStatistics: חסר או לא תקין - playerWithMostRebuys');
+    }
+    
+    // החזרת התוצאות
+    const stats: RebuyStats = {
       totalRebuys,
       totalPurchases,
-      averageRebuysPerGame,
-      averageRebuysPerPlayer,
-      // הוספת הסטטיסטיקה החדשה
-      groupsRebuyStats,
+      averageRebuysPerGame: totalRebuys / gamesCount,
+      averageRebuysPerPlayer: totalParticipants > 0 ? totalRebuys / totalParticipants : 0,
+      averagePurchasesPerPlayer: totalParticipants > 0 ? totalPurchases / totalParticipants : 0,
+      gamesCount,
+      groupsRebuyStats: Array.from(groupRebuyStatsMap.values()),
       playerWithMostRebuys,
       playerWithMostTotalRebuys,
       playerWithLeastTotalRebuys,
@@ -809,6 +963,8 @@ export const getRebuyStatistics = async (
       gameWithMostPurchases,
       gameWithLeastPurchases
     };
+
+    return stats;
   } catch (error) {
     console.error('Error getting rebuy statistics:', error);
     throw error;

@@ -12,7 +12,7 @@ export default function DashboardLayout() {
   
     return (
       // Only admin and super users can access dashboard
-      <ProtectedRoute requiredRole={['admin', 'super']}>
+      <ProtectedRoute requiredRole={['admin']}>
         <Stack
           screenOptions={{
             headerShown: false,

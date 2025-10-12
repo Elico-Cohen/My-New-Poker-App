@@ -11,7 +11,7 @@ export default function LoginScreen() {
   const [loginInProgress, setLoginInProgress] = useState(false);
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
   
-  // נוסיף לוגים מפורטים לצורך דיבוג
+  // לוג פשוט רק במאונט/אנמאונט
   useEffect(() => {
     console.log("Login screen mounted");
     // ניקוי שגיאות קודמות בטעינת המסך
@@ -20,28 +20,18 @@ export default function LoginScreen() {
   }, []);
 
   useEffect(() => {
-    console.log('Login status changed:', { isAuthenticated, isLoading, error });
+    // רק לוג חשוב - לא בכל שינוי מצב
+    if (isAuthenticated && !isLoading) {
+      console.log('Login successful - redirecting to home');
+      // ניווט מיידי ללא timeout
+      router.replace('/(tabs)/home2');
+    }
     
     // עדכון מצב הטעינה המקומי לפי מצב הטעינה הכללי
     if (!isLoading) {
       setLoginInProgress(false);
     }
-    
-    // אם המשתמש מאומת, ננסה לנווט ל-home2
-    if (isAuthenticated && !isLoading) {
-      console.log('Navigation to home2 will be attempted in 2 seconds');
-      setTimeout(() => {
-        console.log('Attempting navigation to home2');
-        try {
-          // שימוש ב-navigate במקום replace
-          router.navigate('/(tabs)/home2');
-          console.log('Navigation command executed');
-        } catch (err) {
-          console.error('Navigation error:', err);
-        }
-      }, 2000);
-    }
-  }, [isAuthenticated, isLoading, error]);
+  }, [isAuthenticated, isLoading]);
 
   // פונקציה לטיפול בכניסה למערכת
   const handleLogin = async () => {
@@ -54,21 +44,18 @@ export default function LoginScreen() {
       // ניקוי שגיאות קודמות
       clearError?.();
       setLoginInProgress(true);
-      console.log('Attempting login with:', email);
+      console.log('Attempting login...');
       await login(email, password);
-      console.log('Login succeeded');
-      // הניווט יתבצע באמצעות ה-useEffect שמאזין לשינויים ב-isAuthenticated
+      // הניווט יתבצע באמצעות ה-useEffect
     } catch (err) {
       console.error('Login failed:', err);
-      // שגיאות מטופלות בתוך פונקציית login, אז אין צורך בטיפול נוסף כאן
+      // שגיאות מטופלות בתוך פונקציית login
     }
-    // לא מבצעים כאן finally וסומכים על ה-useEffect לעדכן את מצב הטעינה
   };
 
   // הניקוי של שדות הטופס בשינוי אימייל או סיסמה
   useEffect(() => {
     if (error) {
-      console.log('Clearing error on input change');
       clearError?.();
     }
   }, [email, password]);

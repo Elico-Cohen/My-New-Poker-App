@@ -16,7 +16,7 @@ type FontAwesomeName = keyof typeof FontAwesome.glyphMap;
 
 // פונקציה שבונה אייקון לטאב
 function TabBarIcon(props: { name: FontAwesomeName; color: string }) {
-  return <FontAwesome name={props.name} size={28} style={{ marginBottom: -3 }} color={props.color} />;
+  return <FontAwesome name={props.name} size={32} style={{ marginBottom: -3 }} color={props.color} />;
 }
 
 export default function TabsLayout() {
@@ -29,16 +29,22 @@ export default function TabsLayout() {
     // החזרנו את ProtectedRoute אחרי השיפורים
     <ProtectedRoute>
       {/* Add the ExitHandler component to manage app exit */}
-      <ExitHandler active={true} showLogoutOption={true} />
+      <ExitHandler />
       
       <Tabs
         screenOptions={{
           // הסרת ה-header המובנה על ידי הגדרה קבועה של false
           headerShown: false,
-          tabBarActiveTintColor: theme.primary,
+          header: () => null,
+          tabBarActiveTintColor: '#FFFFFF', // האייקון הפעיל בצבע לבן
+          tabBarInactiveTintColor: '#FFD700', // האייקונים הלא פעילים בצבע זהב
           tabBarStyle: {
-            backgroundColor: theme.background,
-            borderTopColor: theme.border,
+            backgroundColor: '#35654d', // רקע התפריט בצבע ירוק
+            borderTopColor: '#FFD700', // קו גבול עליון בצבע זהב
+            borderTopWidth: 1,
+            height: 65, // הגדלת גובה התפריט
+            paddingBottom: 10, // הוספת ריווח בתחתית התפריט
+            paddingTop: 5, // הוספת ריווח בראש התפריט
           },
           headerStyle: {
             backgroundColor: theme.background,
@@ -87,6 +93,7 @@ export default function TabsLayout() {
           name="history"
           options={{
             title: 'History',
+            headerShown: false,
             tabBarIcon: ({ color }: { color: string }) => <TabBarIcon name="history" color={color} />,
           }}
         />
@@ -96,6 +103,7 @@ export default function TabsLayout() {
           name="statistics"
           options={{
             title: 'Statistics',
+            headerShown: false,
             tabBarIcon: ({ color }: { color: string }) => <TabBarIcon name="line-chart" color={color} />,
           }}
         />

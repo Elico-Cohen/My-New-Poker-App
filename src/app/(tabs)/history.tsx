@@ -1,7 +1,7 @@
 // src/app/(tabs)/history.tsx
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
@@ -15,6 +15,8 @@ import { getDocs, collection, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Dialog } from '@/components/common/Dialog';
 import gameDataManager from '@/services/gameDataManager';
+import ActiveGameBanner from '@/components/common/ActiveGameBanner';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Define fallback date object to use when date is invalid
 const DEFAULT_GAME_DATE = {
@@ -39,6 +41,7 @@ const CASINO_COLORS = {
 export default function HistoryScreen() {
   const router = useRouter();
   const { refresh } = useLocalSearchParams<{ refresh: string }>();
+  const { canDeleteEntity } = useAuth();
   
   // State
   const [allGames, setAllGames] = useState<Game[]>([]);  // Store all fetched games
@@ -86,9 +89,11 @@ export default function HistoryScreen() {
   // Process a game to ensure it has valid data
   const processGame = (game: any): Game | null => {
     if (!game || !game.id) {
-      console.warn('Invalid game object, skipping:', game);
+      console.warn('processGame: Invalid game object, skipping:', game);
       return null;
     }
+    
+    console.log(`processGame: מעבד משחק ${game.id}, status: ${game.status}`);
     
     try {
       // יצירת עותק בטוח
@@ -99,14 +104,15 @@ export default function HistoryScreen() {
       safeGame.payments = Array.isArray(safeGame.payments) ? safeGame.payments : [];
       
       // הדפסת האובייקט המלא לאיתור הבעיה
-      console.log(`Game ${game.id} fields:`, Object.keys(safeGame));
+      console.log(`processGame: Game ${game.id} fields:`, Object.keys(safeGame));
+      console.log(`processGame: Game ${game.id} players count: ${safeGame.players.length}`);
       
       // טיפול בעקביות של שדות התאריך
       const dateSource = safeGame.gameDate || safeGame.date;
-      console.log(`Game ID ${game.id}, date source:`, dateSource);
+      console.log(`processGame: Game ID ${game.id}, date source:`, dateSource);
       
       if (!dateSource || typeof dateSource !== 'object') {
-        console.warn(`Game ${game.id} missing date fields, using createdAt or default`);
+        console.warn(`processGame: Game ${game.id} missing date fields, using createdAt or default`);
         
         // שימוש ב-createdAt כמקור חלופי לתאריך
         if (typeof safeGame.createdAt === 'number') {
@@ -132,9 +138,10 @@ export default function HistoryScreen() {
         };
       }
       
+      console.log(`processGame: Game ${game.id} processed successfully with date:`, safeGame.date);
       return safeGame;
     } catch (err) {
-      console.error(`Error processing game ${game?.id}:`, err);
+      console.error(`processGame: Error processing game ${game?.id}:`, err);
       return null;
     }
   };
@@ -144,116 +151,58 @@ export default function HistoryScreen() {
     try {
       console.log('History: טוען משחקים ממנהל הנתונים המרכזי');
       
-      // השימוש במנהל הנתונים המרכזי במקום ב-Firebase ישירות
-      // מציג רק משחקים שהושלמו - לפי הדרישה של מסך ההיסטוריה
+      // נקה מטמון כדי לוודא נתונים רעננים
+      gameDataManager.clearGamesCache();
+      
+      // בדיקה נוספת: נראה כמה משחקים יש בכלל (כולל לא מושלמים)
+      console.log('History: בודק כמה משחקים יש בכלל ב-Firestore...');
+      const allGamesIncludingIncomplete = await gameDataManager.fetchAllGames({ 
+        skipCache: true,
+        onlyCompleted: false  // כל המשחקים
+      });
+      console.log(`History: סה"כ משחקים בכלל ב-Firestore (כולל לא מושלמים): ${allGamesIncludingIncomplete.length}`);
+      
       const allGames = await gameDataManager.fetchAllGames({ 
-        skipCache: false,
+        skipCache: true,  // אילץ רענון חד פעמי
         onlyCompleted: true  // הצגת משחקים שהושלמו בלבד
       });
       
-      // הפעלת הפונקציה processGame על התוצאות כדי לוודא עקביות בפורמט הנתונים
-      // עבור קוד קיים שעדיין מצפה למבנה נתונים מסוים
-      const processedGames: Game[] = [];
-      allGames.forEach(gameData => {
-        const processedGame = processGame(gameData);
-        if (processedGame) {
-          processedGames.push(processedGame);
-        }
-      });
+      console.log(`History: gameDataManager החזיר ${allGames.length} משחקים מושלמים`);
+      console.log(`History: הפרש: ${allGamesIncludingIncomplete.length - allGames.length} משחקים לא מושלמים`);
       
-      // Sort games by date in descending order (newest first)
-      const sortedGames = processedGames.sort((a, b) => {
-        const timestampA = a.date?.timestamp || 0;
-        const timestampB = b.date?.timestamp || 0;
-        return timestampB - timestampA;
-      });
+      // הצגת המשחקים הלא מושלמים
+      const incompleteGames = allGamesIncludingIncomplete.filter(game => game.status !== 'completed');
+      if (incompleteGames.length > 0) {
+        console.log('History: משחקים לא מושלמים:');
+        incompleteGames.forEach(game => {
+          console.log(`- ${game.id}: status=${game.status}, players=${game.players?.length || 0}`);
+        });
+      }
       
-      console.log(`History: עיבד בהצלחה ${sortedGames.length} משחקים שהושלמו`);
-      return sortedGames;
+      // gameDataManager כבר מעבד את המשחקים ומטפל בפורמט התאריך
+      // אז אנחנו פשוט נחזיר את התוצאות ישירות
+      
+      console.log(`History: החזיר ${allGames.length} משחקים מעובדים מ-gameDataManager`);
+      return allGames;
     } catch (error) {
       console.error('History: שגיאה בהבאת כל המשחקים:', error);
       throw error;
     }
   };
 
-  // Handle game deletion
-  const handleDeleteGame = async () => {
-    if (!gameToDelete) return;
-    
-    try {
-      setDeleteLoading(true);
-      setDeleteError(null);
-      
-      // Call the delete service
-      await deleteGame(gameToDelete.id);
-      
-      // Update local state after successful deletion
-      const updatedGames = allGames.filter(game => game.id !== gameToDelete.id);
-      setAllGames(updatedGames);
-      setFilteredGames(filteredGames.filter(game => game.id !== gameToDelete.id));
-      
-      // Close dialog
-      setDeleteDialogVisible(false);
-      setGameToDelete(null);
-      
-    } catch (error) {
-      console.error('Error deleting game:', error);
-      setDeleteError('מחיקת המשחק נכשלה. אנא נסה שוב מאוחר יותר.');
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
-
-  // Load data
-  useEffect(() => {
-    const loadData = async () => {
-      console.log('Starting loadData function');
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Load groups for filtering
-        console.log('Fetching active groups');
-        const groupsData = await getAllActiveGroups();
-        console.log(`Fetched ${groupsData.length} groups`);
-        
-        setGroups([
-          { label: 'כל הקבוצות', value: 'all' },
-          ...groupsData.map(group => ({ 
-            label: group.name, 
-            value: group.id 
-          }))
-        ]);
-        
-        // Load all games at once
-        const allGamesData = await fetchAllGames();
-        setAllGames(allGamesData);
-        setFilteredGames(allGamesData);
-        
-      } catch (err) {
-        console.error('Failed to load history data:', err);
-        setError('טעינת הנתונים נכשלה. אנא נסה שוב.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [refresh]);
-  
-  // Apply filters when they change
-  useEffect(() => {
+  // Function to apply current filters to a list of games and update state
+  const applyFiltersAndSetState = (gamesToFilter: Game[]) => {
     console.log('Applying filters');
-    
-    if (allGames.length === 0) {
+    if (gamesToFilter.length === 0) {
       console.log('No games to filter');
+      setFilteredGames([]); // Ensure filtered list is empty if source is empty
       return;
     }
     
     try {
-      // Start with all games
-      let result = [...allGames];
-      console.log(`Starting with ${result.length} games`);
+      // Start with the provided games
+      let result = [...gamesToFilter];
+      console.log(`Filtering ${result.length} games`);
       
       // Filter by group
       if (selectedGroup !== 'all') {
@@ -279,7 +228,6 @@ export default function HistoryScreen() {
         
         result = result.filter(game => {
           try {
-            // Safely access timestamp with fallback
             const gameTimestamp = game.date?.timestamp || 0;
             return gameTimestamp >= cutoffTimestamp;
           } catch (err) {
@@ -297,9 +245,7 @@ export default function HistoryScreen() {
         result = result.filter(game => {
           try {
             if (!game.players || !Array.isArray(game.players)) return false;
-            
             return game.players.some(player => 
-              player.name && typeof player.name === 'string' && 
               player.name.toLowerCase().includes(query)
             );
           } catch (err) {
@@ -307,21 +253,135 @@ export default function HistoryScreen() {
             return false;
           }
         });
-        console.log(`After player name filter: ${result.length} games`);
+        console.log(`After search filter: ${result.length} games`);
       }
       
-      // Sort by date (newest first)
-      result.sort((a, b) => {
-        const timestampA = a.date?.timestamp || 0;
-        const timestampB = b.date?.timestamp || 0;
-        return timestampB - timestampA;
-      });
-      
       setFilteredGames(result);
+      console.log(`Filtered games count: ${result.length}`);
     } catch (err) {
       console.error('Error applying filters:', err);
+      // Optionally set an error state here
+      setFilteredGames([]); // Reset filtered games on error
     }
-  }, [selectedGroup, selectedPeriod, searchQuery, allGames, refresh]);
+  };
+
+  // Handle game deletion
+  const handleDeleteGame = async () => {
+    if (!gameToDelete) return;
+    
+    try {
+      setDeleteLoading(true);
+      setDeleteError(null);
+      
+      // Call the delete service
+      console.log(`History: Deleting game ${gameToDelete.id}`);
+      await deleteGame(gameToDelete.id);
+      console.log(`History: Game ${gameToDelete.id} deleted successfully`);
+      
+      // נקה את המטמון לפני רענון הנתונים
+      console.log('History: Clearing cache before refresh...');
+      gameDataManager.clearGamesCache();
+      
+      // Refetch the games list to update the UI
+      console.log('History: Refetching games after deletion...');
+      const updatedGames = await gameDataManager.fetchAllGames({ 
+        skipCache: true,  // אילץ רענון מ-Firestore
+        onlyCompleted: true
+      });
+      
+      console.log(`History: After deletion, fetched ${updatedGames.length} games`);
+      
+      // עדכן את רשימת המשחקים הראשית
+      setAllGames(updatedGames);
+      
+      // החל פילטרים על הרשימה המעודכנת
+      applyFiltersAndSetState(updatedGames);
+      
+      console.log(`History: Updated UI with ${updatedGames.length} games after deletion`);
+
+      // Clear deletion state and close dialog
+      setGameToDelete(null);
+      setDeleteDialogVisible(false);
+      
+    } catch (error) {
+      console.error('History: Error deleting game:', error);
+      setDeleteError('מחיקת המשחק נכשלה. אנא נסה שוב מאוחר יותר.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Add useFocusEffect to refresh data when screen is focused after a potential change
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('History screen focused, checking for refresh param...');
+      if (refresh === 'true') {
+        console.log('Refresh param found, reloading data...');
+        loadData();
+        // Optionally, navigate back or remove the param to prevent multiple refreshes
+        // router.setParams({ refresh: undefined }); 
+      }
+    }, [refresh])
+  );
+
+  // Renamed loadData to be callable explicitly
+  const loadData = async () => {
+    console.log('Starting loadData function');
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Load groups for filtering
+      console.log('Fetching active groups');
+      const groupsData = await getAllActiveGroups();
+      console.log(`Fetched ${groupsData.length} groups`);
+      
+      setGroups([
+        { label: 'כל הקבוצות', value: 'all' },
+        ...groupsData.map(group => ({ 
+          label: group.name, 
+          value: group.id 
+        }))
+      ]);
+      
+      // Load all games at once using gameDataManager directly
+      console.log('Loading games using gameDataManager...');
+      const allGamesData = await gameDataManager.fetchAllGames({
+        skipCache: false,  // שימוש במטמון אם זמין
+        onlyCompleted: true
+      });
+      console.log(`Loaded ${allGamesData.length} completed games`);
+      
+      setAllGames(allGamesData);
+      // Apply initial filters
+      applyFiltersAndSetState(allGamesData);
+      
+    } catch (err) {
+      console.error('Failed to load history data:', err);
+      setError('טעינת הנתונים נכשלה. אנא נסה שוב.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Original useEffect that called loadData - now just calls it once or on refresh
+  useEffect(() => {
+    loadData();
+  }, [refresh]);
+
+  // רענון נתונים כשחוזרים למסך ההיסטוריה (אחרי סיום משחק)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('History screen focused - refreshing data');
+      loadData();
+    }, [])
+  );
+  
+  // Apply filters when they change
+  useEffect(() => {
+    // Call the filtering function whenever filters or the base list change
+    applyFiltersAndSetState(allGames); 
+  }, [allGames, selectedGroup, selectedPeriod, searchQuery]); // Dependencies include allGames and filters
   
   // Calculate game result data
   const calculateGameStats = (game: Game) => {
@@ -363,12 +423,12 @@ export default function HistoryScreen() {
   if (loading && filteredGames.length === 0) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={{ width: 40 }} />
-          <Text variant="h4" style={styles.headerTitle}>
-            היסטוריית משחקים
-          </Text>
-          <View style={{ width: 40 }} />
+        <View style={styles.headerContainer}>
+          <TouchableOpacity onPress={loadData} style={styles.refreshButton}>
+            <Icon name="refresh" size={28} color={CASINO_COLORS.gold} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>היסטוריית משחקים</Text>
+          <View style={{ width: 44 }} />
         </View>
         <View style={styles.loadingContainer}>
           <LoadingIndicator text="טוען היסטוריה..." />
@@ -379,14 +439,20 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ width: 40 }} />
-        <Text variant="h4" style={styles.headerTitle}>
-          היסטוריית משחקים
-        </Text>
-        <View style={{ width: 40 }} />
+      <Stack.Screen options={{ headerShown: false, header: () => null }} />
+      
+      {/* Header with Refresh Button */}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity onPress={loadData} style={styles.refreshButton}>
+          <Icon name="refresh" size={28} color={CASINO_COLORS.gold} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>היסטוריית משחקים</Text>
+        {/* Placeholder to balance the title */}
+        <View style={{ width: 44 }} /> 
       </View>
+
+      {/* Active Game Banner - shows when there's an active game */}
+      <ActiveGameBanner style={{ margin: 16, marginBottom: 8 }} />
 
       {/* Filters */}
       <View style={styles.filtersContainer}>
@@ -422,8 +488,17 @@ export default function HistoryScreen() {
             onChangeText={setSearchQuery}
             placeholder="חיפוש לפי שם שחקן..."
             style={styles.searchInput}
+            clearable={true}
+            onClear={() => setSearchQuery('')}
           />
         </View>
+      </View>
+
+      {/* Display Filtered Games Count */}
+      <View style={styles.countContainer}>
+        <Text style={styles.countText}>
+          {`נמצאו ${filteredGames.length} משחקים`}
+        </Text>
       </View>
 
       {/* Games List */}
@@ -450,8 +525,17 @@ export default function HistoryScreen() {
                   key={game.id}
                   onPress={() => router.push(`/history/${game.id}`)}
                   onLongPress={() => {
-                    setGameToDelete(game);
-                    setDeleteDialogVisible(true);
+                    // Only allow deletion if user has permission
+                    if (canDeleteEntity('game')) {
+                      setGameToDelete(game);
+                      setDeleteDialogVisible(true);
+                    } else {
+                      Alert.alert(
+                        "אין הרשאה", 
+                        "רק מנהל מערכת יכול למחוק משחקים.", 
+                        [{ text: "הבנתי" }]
+                      );
+                    }
                   }}
                   delayLongPress={500} // 500ms threshold for long press
                 >
@@ -549,20 +633,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: CASINO_COLORS.background,
   },
-  header: {
+  headerContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: CASINO_COLORS.primary,
-    padding: 16,
     borderBottomWidth: 2,
     borderBottomColor: CASINO_COLORS.gold,
   },
   headerTitle: {
     color: CASINO_COLORS.gold,
-    textAlign: 'center',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
+  },
+  refreshButton: {
+    padding: 8,
   },
   filtersContainer: {
     backgroundColor: CASINO_COLORS.surface,
@@ -673,5 +760,15 @@ const styles = StyleSheet.create({
   deleteErrorText: {
     color: CASINO_COLORS.error,
     textAlign: 'center',
-  }
+  },
+  countContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    alignItems: 'flex-end',
+  },
+  countText: {
+    color: CASINO_COLORS.gold,
+    fontSize: 16,
+  },
 });

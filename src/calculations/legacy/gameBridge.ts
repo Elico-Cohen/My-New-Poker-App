@@ -5,7 +5,8 @@
  */
 
 import { Game } from '../../models/Game';
-import { Player } from '../../models/Player';
+// Player כנראה חלק ממודל Game
+// import { Player } from '../../models/Player';
 import { 
   calculateGameResults, 
   calculateGamePlayersResults,
@@ -18,12 +19,18 @@ import {
   OptimalPaymentsResult
 } from '../index';
 
+// ייבוא ישיר של פונקציית calculateInitialGameSummary מהמודול המקורי
+import { calculateInitialGameSummary as originalCalculateInitialGameSummary } from '../../utils/gameCalculations';
+
+// ייצוא מחדש של הפונקציה המקורית - עד שתיושם בשכבה החדשה
+export const calculateInitialGameSummary = originalCalculateInitialGameSummary;
+
 /**
  * חישוב השקעת שחקן במשחק
  * @param player השחקן
  * @returns סכום ההשקעה של השחקן
  */
-export function calculatePlayerInvestment(player: Player): number {
+export function calculatePlayerInvestment(player: any): number {
   return (player.buyin || 0) + (player.rebuys?.reduce((acc: number, rebuy: any) => acc + rebuy.amount, 0) || 0);
 }
 
@@ -32,7 +39,7 @@ export function calculatePlayerInvestment(player: Player): number {
  * @param player השחקן
  * @returns הרווח/הפסד ההתחלתי
  */
-export function calculateInitialPlayerResult(player: Player): number {
+export function calculateInitialPlayerResult(player: any): number {
   if (!player) return 0;
   const investment = calculatePlayerInvestment(player);
   const finalChips = player.finalChips || 0;
@@ -44,7 +51,7 @@ export function calculateInitialPlayerResult(player: Player): number {
  * @param player השחקן
  * @returns הרווח/הפסד הסופי
  */
-export function calculateFinalPlayerResult(player: Player): number {
+export function calculateFinalPlayerResult(player: any): number {
   if (!player) return 0;
   
   const initialResult = calculateInitialPlayerResult(player);

@@ -18,7 +18,7 @@ type ButtonStylesType = {
   [key: string]: any;  // מאפשר גישה דינמית למאפיינים
 };
 
-interface ButtonProps {
+export interface ButtonProps {
   onPress: () => void;
   title?: string;  // הפך לאופציונלי
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';

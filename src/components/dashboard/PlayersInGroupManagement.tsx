@@ -46,6 +46,7 @@ interface PlayersInGroupManagementProps {
 interface NewPlayerFormData {
   name: string;
   phone: string;
+  email?: string;
 }
 
 export function PlayersInGroupManagement({
@@ -76,7 +77,8 @@ export function PlayersInGroupManagement({
   // מצב שחקן חדש
   const [newPlayerData, setNewPlayerData] = React.useState<NewPlayerFormData>({
     name: '',
-    phone: ''
+    phone: '',
+    email: ''
   });
 
   // מצבי UI
@@ -191,6 +193,10 @@ export function PlayersInGroupManagement({
         setNameError('נדרש להזין שם שחקן');
         return;
       }
+      if (newPlayerData.email && !/\S+@\S+\.\S+/.test(newPlayerData.email)) {
+        setError('כתובת אימייל אינה תקינה');
+        return;
+      }
       if (nameError) return;
 
       setLoading(true);
@@ -211,12 +217,29 @@ export function PlayersInGroupManagement({
 
       setSelectedPlayers(prev => [...prev, newGuest]);
       
-      setShowNewPlayerDialog(false);
-      setNewPlayerData({ name: '', phone: '' });
-      setNameError(null);
+      // Check if email was provided to show appropriate message
+      if (newPlayerData.email && newPlayerData.email.trim()) {
+        setError('✅ השחקן נוצר בהצלחה עם אימייל! המערכת תתנתק אוטומטית כדי לשמור על אבטחת המערכת. תוכל להתחבר מחדש כאדמין תוך כמה שניות.');
+        
+        // Close dialog after showing success message
+        setTimeout(() => {
+          setShowNewPlayerDialog(false);
+          setNewPlayerData({ name: '', phone: '', email: '' });
+          setNameError(null);
+        }, 3000);
+      } else {
+        // Regular success for player without email
+        setShowNewPlayerDialog(false);
+        setNewPlayerData({ name: '', phone: '', email: '' });
+        setNameError(null);
+      }
     } catch (error: any) {
       console.error('Failed to create new player:', error);
-      setNameError(error.message || 'יצירת השחקן נכשלה. אנא נסה שוב.');
+      if (error.message && error.message.toLowerCase().includes('שם')) {
+          setNameError(error.message);
+      } else {
+          setError(error.message || 'יצירת השחקן נכשלה. אנא נסה שוב.');
+      }
     } finally {
       setLoading(false);
     }
@@ -258,7 +281,7 @@ export function PlayersInGroupManagement({
         alignItems: 'center',
         marginBottom: 8
       }}>
-        <Text variant="h4" style={{ color: CASINO_COLORS.gold }}>{title}</Text>
+        <Text variant="titleLarge" style={{ color: CASINO_COLORS.gold }}>{title}</Text>
       </View>
       {players.map(player => (
         <Card key={player.id} style={{
@@ -276,13 +299,13 @@ export function PlayersInGroupManagement({
             paddingVertical: 4,
             paddingHorizontal: 4,
           }}>
-            <Text variant="h5" style={{ color: CASINO_COLORS.text, fontWeight: '600' }}>
+            <Text variant="labelLarge" style={{ color: CASINO_COLORS.text, fontWeight: '600' }}>
               {player.name}
             </Text>
             <View style={{ flexDirection: 'row', gap: 24 }}>
               <Button
                 variant="ghost"
-                icon="account-convert"
+                icon="account-outline"
                 iconSize={24}
                 iconColor={CASINO_COLORS.text}
                 size="small"
@@ -292,7 +315,7 @@ export function PlayersInGroupManagement({
               />
               <Button
                 variant="ghost"
-                icon="trash-can"
+                icon="delete"
                 iconSize={24}
                 iconColor={CASINO_COLORS.text}
                 size="small"
@@ -345,13 +368,11 @@ export function PlayersInGroupManagement({
       <Dialog
         visible={showAddPlayersDialog}
         title="הוספת שחקנים"
-        onClose={() => {
+        onDismiss={() => {
           setShowAddPlayersDialog(false);
           setSelectedPlayers([]);
           setShowInactivePlayers(false);
         }}
-        confirmText=""
-        cancelText=""
         containerStyle={{
           backgroundColor: CASINO_COLORS.background,
         }}
@@ -431,7 +452,7 @@ export function PlayersInGroupManagement({
                   <Icon
                     name={selectedPlayers.some(p => p.id === player.id) ?
                       'checkbox-marked-outline' : 'checkbox-blank-outline'}
-                    size="medium"
+                    size={24}
                     color={CASINO_COLORS.text}
                   />
                   {selectedPlayers.some(p => p.id === player.id) && (
@@ -439,9 +460,9 @@ export function PlayersInGroupManagement({
                       title={selectedPlayers.find(p => p.id === player.id)?.isPermanent ? "קבוע" : "אורח"}
                       variant="outline"
                       size="small"
-                      icon="account-convert"
+                      icon="account-outline"
                       iconColor={CASINO_COLORS.text}
-                      onPress={(e) => {
+                      onPress={(e: React.SyntheticEvent) => {
                         e.stopPropagation();
                         togglePlayerType(player.id);
                       }}
@@ -477,22 +498,41 @@ export function PlayersInGroupManagement({
       <Dialog
         visible={showNewPlayerDialog}
         title="הוסף שחקן חדש"
-        onClose={() => {
+        onDismiss={() => {
           setShowNewPlayerDialog(false);
-          setNewPlayerData({ name: '', phone: '' });
+          setNewPlayerData({ name: '', phone: '', email: '' });
           setNameError(null);
+          setError(null);
         }}
-        confirmText="אישור"
-        cancelText="ביטול"
-        onConfirm={handleNewPlayerSubmit}
-        onCancel={() => {
-          setShowNewPlayerDialog(false);
-          setNewPlayerData({ name: '', phone: '' });
-          setNameError(null);
+        containerStyle={{
+          backgroundColor: CASINO_COLORS.background,
         }}
+        style={{
+          backgroundColor: CASINO_COLORS.background,
+          borderColor: CASINO_COLORS.gold,
+          borderWidth: 1,
+          width: '100%'
+        }}
+        actions={[
+          {
+            text: "ביטול",
+            onPress: () => {
+              setShowNewPlayerDialog(false);
+              setNewPlayerData({ name: '', phone: '', email: '' });
+              setNameError(null);
+              setError(null);
+            },
+            style: "cancel",
+          },
+          {
+            text: "אישור",
+            onPress: handleNewPlayerSubmit,
+            style: "confirm",
+          },
+        ]}
       >
         <View style={styles.newPlayerContainer}>
-          <Text variant="bodyMedium" style={styles.inputLabel}>
+          <Text variant="bodyLarge" style={styles.inputLabel}>
             שם השחקן
           </Text>
           <Input
@@ -514,7 +554,7 @@ export function PlayersInGroupManagement({
               {nameError}
             </Text>
           )}
-          <Text variant="bodyMedium" style={styles.inputLabel}>
+          <Text variant="bodyLarge" style={styles.inputLabel}>
             טלפון (אופציונלי)
           </Text>
           <Input
@@ -524,6 +564,22 @@ export function PlayersInGroupManagement({
             keyboardType="phone-pad"
             style={styles.fixedInput}
           />
+          <Text variant="bodyLarge" style={styles.inputLabel}>
+            אימייל (אופציונלי)
+          </Text>
+          <Input
+            value={newPlayerData.email || ''}
+            onChangeText={(text) => setNewPlayerData(prev => ({ ...prev, email: text }))}
+            placeholder="הזן אימייל"
+            keyboardType="default"
+            autoCapitalize="none"
+            style={styles.fixedInput}
+          />
+          {error && !nameError && (
+            <Text variant="bodySmall" style={styles.errorText}>
+              {error}
+            </Text>
+          )}
         </View>
       </Dialog>
   
@@ -533,7 +589,7 @@ export function PlayersInGroupManagement({
           setShowDeleteDialog(false);
           setPlayerToDelete(null);
         }}
-        onConfirm={confirmDeletePlayer}
+        onConfirm={async () => confirmDeletePlayer()}
         itemName={playerToDelete?.name || ''}
         itemType="שחקן"
       />

@@ -5,6 +5,12 @@
  * מהפונקציות הישנות לפונקציות החדשות
  */
 
+// ייבוא ישיר של פונקציית calculateInitialGameSummary מהמודול המקורי
+import { calculateInitialGameSummary } from '@/utils/gameCalculations';
+
+// ייצוא מחדש של הפונקציה המקורית
+export { calculateInitialGameSummary };
+
 // ייצוא מגשר פונקציות שחקן
 export * from './playerBridge';
 
@@ -16,6 +22,9 @@ export * from './financialBridge';
 
 // ייצוא מגשר פונקציות מגמות זמן
 export * from './timeBridge';
+
+// ייצוא מגשר פונקציות משחקים פתוחים
+export * from './openGamesBridge';
 
 // פונקציות ניקוי מטמון מרכזיות
 import { CacheManager } from '../index';

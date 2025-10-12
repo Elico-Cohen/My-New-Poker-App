@@ -14,7 +14,9 @@ const CASINO_COLORS = {
   primary: '#35654d',
   gold: '#FFD700',
   surface: '#1C2C2E',
-  text: '#B8B8B8'
+  text: '#B8B8B8',
+  darkText: '#2D4A32',
+  mediumText: '#4A6B4F'
 };
 
 interface DetailsTabProps {
@@ -73,8 +75,9 @@ function DetailsTab({
       <View style={{ gap: 24 }}>
         {error && (
           <Text variant="bodyNormal" style={{ 
-            color: CASINO_COLORS.gold,
-            textAlign: 'right'
+            color: '#dc3545',
+            textAlign: 'right',
+            fontWeight: '500'
           }}>
             {error}
           </Text>
@@ -90,7 +93,8 @@ function DetailsTab({
             color: CASINO_COLORS.gold,
             width: 120,
             fontSize: 16,
-            textAlign: 'right'
+            textAlign: 'right',
+            fontWeight: '600'
           }}>
             שם הקבוצה:
           </Text>
@@ -100,12 +104,13 @@ function DetailsTab({
               onChangeText={setName}
               placeholder="הכנס שם קבוצה"
               style={{ 
-                backgroundColor: CASINO_COLORS.primary,
-                borderColor: CASINO_COLORS.gold,
+                backgroundColor: '#f8f9fa',
+                borderColor: CASINO_COLORS.mediumText,
+                borderWidth: 1,
                 height: 48
               }}
               inputStyle={{ 
-                color: CASINO_COLORS.gold,
+                color: '#2c3e50',
                 fontSize: 16,
                 textAlign: 'right',
                 paddingRight: 12
@@ -121,16 +126,18 @@ function DetailsTab({
             <Text variant="h4" style={{ 
               color: CASINO_COLORS.gold,
               marginBottom: 12,
-              textAlign: 'right'
+              textAlign: 'right',
+              fontWeight: 'bold'
             }}>
               Buy-in
             </Text>
             <View style={{ gap: 12 }}>
               <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
-                  color: CASINO_COLORS.text,
+                  color: CASINO_COLORS.gold,
                   width: 120,
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  fontWeight: '500'
                 }}>
                   כמות צ'יפים:
                 </Text>
@@ -140,13 +147,14 @@ function DetailsTab({
                     onChangeText={setBuyInChips}
                     keyboardType="numeric"
                     style={{ 
-                      backgroundColor: CASINO_COLORS.primary,
-                      borderColor: CASINO_COLORS.gold,
+                      backgroundColor: '#f8f9fa',
+                      borderColor: CASINO_COLORS.mediumText,
+                      borderWidth: 1,
                       height: 48,
                       maxWidth: 120
                     }}
                     inputStyle={{ 
-                      color: CASINO_COLORS.gold,
+                      color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
                       paddingRight: 12
@@ -156,9 +164,10 @@ function DetailsTab({
               </View>
               <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
-                  color: CASINO_COLORS.text,
+                  color: CASINO_COLORS.gold,
                   width: 120,
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  fontWeight: '500'
                 }}>
                   סכום בש"ח:
                 </Text>
@@ -168,13 +177,14 @@ function DetailsTab({
                     onChangeText={setBuyInAmount}
                     keyboardType="numeric"
                     style={{ 
-                      backgroundColor: CASINO_COLORS.primary,
-                      borderColor: CASINO_COLORS.gold,
+                      backgroundColor: '#f8f9fa',
+                      borderColor: CASINO_COLORS.mediumText,
+                      borderWidth: 1,
                       height: 48,
                       maxWidth: 120
                     }}
                     inputStyle={{ 
-                      color: CASINO_COLORS.gold,
+                      color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
                       paddingRight: 12
@@ -190,16 +200,18 @@ function DetailsTab({
             <Text variant="h4" style={{ 
               color: CASINO_COLORS.gold,
               marginBottom: 12,
-              textAlign: 'right'
+              textAlign: 'right',
+              fontWeight: 'bold'
             }}>
               Rebuy
             </Text>
             <View style={{ gap: 12 }}>
               <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
-                  color: CASINO_COLORS.text,
+                  color: CASINO_COLORS.gold,
                   width: 120,
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  fontWeight: '500'
                 }}>
                   כמות צ'יפים:
                 </Text>
@@ -209,13 +221,14 @@ function DetailsTab({
                     onChangeText={setRebuyChips}
                     keyboardType="numeric"
                     style={{ 
-                      backgroundColor: CASINO_COLORS.primary,
-                      borderColor: CASINO_COLORS.gold,
+                      backgroundColor: '#f8f9fa',
+                      borderColor: CASINO_COLORS.mediumText,
+                      borderWidth: 1,
                       height: 48,
                       maxWidth: 120
                     }}
                     inputStyle={{ 
-                      color: CASINO_COLORS.gold,
+                      color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
                       paddingRight: 12
@@ -225,9 +238,10 @@ function DetailsTab({
               </View>
               <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
-                  color: CASINO_COLORS.text,
+                  color: CASINO_COLORS.gold,
                   width: 120,
-                  textAlign: 'right'
+                  textAlign: 'right',
+                  fontWeight: '500'
                 }}>
                   סכום בש"ח:
                 </Text>
@@ -237,13 +251,14 @@ function DetailsTab({
                     onChangeText={setRebuyAmount}
                     keyboardType="numeric"
                     style={{ 
-                      backgroundColor: CASINO_COLORS.primary,
-                      borderColor: CASINO_COLORS.gold,
+                      backgroundColor: '#f8f9fa',
+                      borderColor: CASINO_COLORS.mediumText,
+                      borderWidth: 1,
                       height: 48,
                       maxWidth: 120
                     }}
                     inputStyle={{ 
-                      color: CASINO_COLORS.gold,
+                      color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
                       paddingRight: 12
@@ -259,7 +274,8 @@ function DetailsTab({
             <Text variant="h4" style={{ 
               color: CASINO_COLORS.gold,
               marginBottom: 12,
-              textAlign: 'right'
+              textAlign: 'right',
+              fontWeight: 'bold'
             }}>
               חוק האחוזים
             </Text>
@@ -285,19 +301,20 @@ function DetailsTab({
                   editable={useRoundingRule}
                   style={{ 
                     width: 60,
-                    backgroundColor: CASINO_COLORS.primary,
-                    borderColor: CASINO_COLORS.gold,
+                    backgroundColor: '#f8f9fa',
+                    borderColor: CASINO_COLORS.mediumText,
+                    borderWidth: 1,
                     height: 40,
                   }}
                   inputStyle={{ 
-                    color: CASINO_COLORS.gold,
+                    color: '#2c3e50',
                     fontSize: 14,
                     textAlign: 'center',
                     paddingVertical: 0
                   }}
                 />
                 <Text style={{ 
-                  color: CASINO_COLORS.text,
+                  color: CASINO_COLORS.gold,
                   fontSize: 14
                 }}>
                   %

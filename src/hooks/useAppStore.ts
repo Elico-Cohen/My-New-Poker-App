@@ -184,11 +184,6 @@ export const useUsers = () => {
       setUsers(updatedUsers);
     });
     
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
-    });
-    
     return () => {
       unsubscribe();
     };
@@ -241,28 +236,24 @@ export const useGroups = () => {
   const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    // טעינה ראשונית
-    setGroups(store.getGroups());
-    
-    // הרשמה לעדכונים
-    const unsubscribe = store.subscribe('groups', (updatedGroups) => {
-      setGroups(updatedGroups);
-    });
-    
-    const unsubscribeStatus = store.subscribe('groupsStatus', (status) => {
-      setLoading(status.loading);
-      setError(status.error);
-    });
-    
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
-    });
-    
-    return () => {
-      unsubscribe();
-      unsubscribeStatus();
-    };
+    try {
+      // טעינה ראשונית
+      const initialGroups = store.getGroups();
+      setGroups(initialGroups);
+      setLoading(false);
+      
+      // הרשמה לעדכונים
+      const unsubscribe = store.subscribe('groups', (updatedGroups) => {
+        setGroups(updatedGroups);
+      });
+      
+      return () => {
+        unsubscribe();
+      };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'שגיאה בטעינת הקבוצות');
+      setLoading(false);
+    }
   }, []);
   
   return { groups, loading, error };
@@ -296,11 +287,6 @@ export const useGroup = (groupId: string | undefined) => {
     const unsubscribeStatus = store.subscribe('groupsStatus', (status) => {
       setLoading(status.loading);
       setError(status.error);
-    });
-    
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
     });
     
     return () => {
@@ -408,11 +394,6 @@ export const useGames = (options?: {
       setError(status.error);
     });
     
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
-    });
-    
     return () => {
       unsubscribe();
       unsubscribeStatus();
@@ -452,11 +433,6 @@ export const useGame = (gameId: string | undefined) => {
       setError(status.error);
     });
     
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
-    });
-    
     return () => {
       unsubscribe();
       unsubscribeStatus();
@@ -486,11 +462,6 @@ export const usePaymentUnits = () => {
     const unsubscribeStatus = store.subscribe('paymentUnitsStatus', (status) => {
       setLoading(status.loading);
       setError(status.error);
-    });
-    
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
     });
     
     return () => {
@@ -530,11 +501,6 @@ export const usePaymentUnit = (unitId: string | undefined) => {
     const unsubscribeStatus = store.subscribe('paymentUnitsStatus', (status) => {
       setLoading(status.loading);
       setError(status.error);
-    });
-    
-    // אתחול שירות הסנכרון אם עוד לא אותחל
-    syncService.initialize().catch(err => {
-      console.error('Failed to initialize sync service:', err);
     });
     
     return () => {

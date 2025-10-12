@@ -1,7 +1,7 @@
 // src/app/(tabs)/home2.tsx
-import React, { useEffect, useState, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, Dimensions, Image } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
@@ -14,6 +14,7 @@ import { auth } from '@/config/firebase';
 import { LoadingIndicator } from '@/components/common/LoadingIndicator';
 import { Game, GameDate } from '@/models/Game';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGameContext } from '@/contexts/GameContext';
 import { UserProfile } from '@/models/UserProfile';
 import { getLocalGames, clearAllLocalGames } from '@/services/gameSnapshot';
 import StatCard from '@/components/statistics/StatCard';
@@ -22,6 +23,8 @@ import { getWinnersLosersStatistics } from '@/services/statistics/playerStatisti
 import { clearStatsCache } from '@/services/statistics/statisticsService';
 import { syncService } from '@/store/SyncService';
 import { GroupStats } from '@/models/Statistics';
+import HeaderBar from '@/components/navigation/HeaderBar';
+import ActiveGameBanner from '@/components/common/ActiveGameBanner';
 
 // הגדרת צבעי המערכת
 const CASINO_COLORS = {
@@ -53,7 +56,8 @@ export type RecentGame = {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { logout, user, canManageEntity, isAuthenticated, isLoading } = useAuth();
+  const { logout, user, canManageEntity, canAccessDashboard, canStartNewGame, isAuthenticated, isLoading } = useAuth();
+  const { refreshActiveGameStatus } = useGameContext();
 
   // State for Quick Stats
   const [gamesCount, setGamesCount] = useState<number>(0);
@@ -67,7 +71,7 @@ export default function HomeScreen() {
   // State for Recent Games and Groups
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
   // Add state for user profile
@@ -77,7 +81,11 @@ export default function HomeScreen() {
   const [showLocalGamesAlert, setShowLocalGamesAlert] = useState(false);
 
   // Function to fetch user profile by email
-  const fetchUserProfileByEmail = async (email) => {
+  const fetchUserProfileByEmail = async (email: string | null | undefined) => {
+    if (!email) {
+      console.log('fetchUserProfileByEmail: No email provided or email is null');
+      return null;
+    }
     try {
       console.log('Fetching user profile for email:', email);
       const usersQuery = query(collection(db, 'users'), where('email', '==', email));
@@ -86,7 +94,7 @@ export default function HomeScreen() {
       if (!querySnapshot.empty) {
         // Get the first matching user document
         const userDoc = querySnapshot.docs[0];
-        const userData = { id: userDoc.id, ...userDoc.data() };
+        const userData = { id: userDoc.id, ...userDoc.data() } as UserProfile;
         console.log('Found user profile:', userData);
         return userData;
       } else {
@@ -212,7 +220,7 @@ export default function HomeScreen() {
       console.error('Error fetching games:', error);
       
       // אם יש שגיאת הרשאות, ננסה להחזיר רשימה ריקה במקום לזרוק שגיאה
-      if (error.toString().includes('Missing or insufficient permissions')) {
+      if (error instanceof Error && error.toString().includes('Missing or insufficient permissions')) {
         console.log('משתמש חסר הרשאות, מחזיר רשימת משחקים ריקה');
         return [];
       }
@@ -278,10 +286,6 @@ export default function HomeScreen() {
     try {
       console.log('HomeScreen: מתחיל טעינת נתונים סטטיסטיים');
       
-      // Set loading state
-      setLoading(true);
-      setError(null);
-      
       // ניקוי מטמון הסטטיסטיקות ורענון נתונים מהשרת
       console.log('HomeScreen: מנקה מטמון ומרענן נתונים');
       clearStatsCache();
@@ -293,10 +297,10 @@ export default function HomeScreen() {
         const users = await getActiveUsers();
         
         // טען את פרופיל המשתמש
-        const userProfile = await fetchUserProfileByEmail(user?.email);
-        if (userProfile) {
+        const userProfileResult = await fetchUserProfileByEmail(user?.email);
+        if (userProfileResult) {
           console.log('HomeScreen: מגדיר פרופיל משתמש');
-          setUserProfile(userProfile);
+          setUserProfile(userProfileResult);
         }
         
         // טען את נתונים סטטיסטיים של המשתמש
@@ -333,13 +337,10 @@ export default function HomeScreen() {
       } catch (error) {
         console.error('שגיאה בטעינת נתונים:', error);
         setError('אירעה שגיאה בטעינת הנתונים. נסה שוב מאוחר יותר.');
-      } finally {
-        setLoading(false);
       }
     } catch (error) {
       console.error('שגיאה בטעינת נתונים:', error);
       setError('אירעה שגיאה בטעינת הנתונים. נסה שוב מאוחר יותר.');
-      setLoading(false);
     }
   };
 
@@ -384,30 +385,40 @@ export default function HomeScreen() {
   // הוספת קריאה לפונקציה של סטטיסטיקות קבוצה במסגרת טעינת הנתונים
   useEffect(() => {
     if (isAuthenticated && !isLoading && user) {
-      console.log('Starting to fetch data with user:', user.displayName || user.email);
+      console.log('Starting to fetch data with user:', user.email);
       
       const loadAppData = async () => {
         try {
-          setLoading(true);
           setError(null);
           
+          // Don't set loading to true here - let content show immediately
           await Promise.all([
             fetchStats(),
             loadUserProfile(),
             getGroupStatistics()
           ]);
           
-          setLoading(false);
+          // Only set loading to false if it was actually loading
         } catch (err) {
           console.error('Error loading app data:', err);
           setError('אירעה שגיאה בטעינת הנתונים');
-          setLoading(false);
         }
       };
       
       loadAppData();
     }
   }, [isAuthenticated, isLoading, user]);
+
+  // רענון נתונים כשחוזרים למסך הבית (אחרי סיום משחק)
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated && !isLoading && user) {
+        console.log('Home screen focused - refreshing data');
+        fetchStats();
+        refreshActiveGameStatus(); // רענון מצב המשחק הפעיל
+      }
+    }, [isAuthenticated, isLoading, user, refreshActiveGameStatus])
+  );
 
   // בדיקת משחקים מקומיים ומחיקתם
   useEffect(() => {
@@ -457,7 +468,7 @@ export default function HomeScreen() {
   // Handle settings
   const handleSettings = () => {
     // Only navigate to dashboard if user has permission
-    if (canManageEntity('group') || canManageEntity('user') || canManageEntity('paymentUnit')) {
+    if (canAccessDashboard()) {
       router.push('/dashboard');
     } else {
       Alert.alert(
@@ -498,7 +509,7 @@ export default function HomeScreen() {
     loading,
     error,
     userExists: !!user,
-    userName: user?.name || user?.displayName,
+    userName: user?.name,
     userRole: user?.role,
     userProfileExists: !!userProfile,
     userProfileName: userProfile?.name,
@@ -525,28 +536,6 @@ export default function HomeScreen() {
           }}
           style={{marginTop: 20}}
         />
-      </View>
-    );
-  }
-
-  if (loading) {
-    console.log('Rendering loading state, user:', user?.name || user?.displayName);
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.greeting}>שלום {user?.name || 'משתמש'}</Text>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={() => {
-              handleLogout();
-            }}
-          >
-            <Text style={styles.logoutText}>התנתקות</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.loadingContainer}>
-          <LoadingIndicator text="טוען נתונים..." />
-        </View>
       </View>
     );
   }
@@ -580,7 +569,7 @@ export default function HomeScreen() {
 
   console.log('Rendering main content with user:', {
     userExists: !!user,
-    userName: user?.name || user?.displayName,
+    userName: user?.name,
     userRole: user?.role,
     userProfileExists: !!userProfile,
     userProfileName: userProfile?.name
@@ -589,23 +578,34 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       {/* Header with Dashboard Icon and Logout */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerButton} 
-          onPress={() => router.push('/dashboard')}
-          accessibilityLabel="לחץ כאן כדי לגשת ללוח הניהול">
-          <Icon name="cog" size="large" color="#FFD700" />
-        </TouchableOpacity>
+      <HeaderBar
+        title="ברוכים הבאים"
+        showBack={false}
+        backgroundColor={CASINO_COLORS.primary}
+        textColor={CASINO_COLORS.gold}
+        borderColor={CASINO_COLORS.gold}
+        rightElement={
+          canAccessDashboard() ? (
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={handleSettings}
+              accessibilityLabel="לחץ כאן כדי לגשת ללוח הניהול">
+              <Icon name="cog" size={24} color="#FFD700" />
+            </TouchableOpacity>
+          ) : null
+        }
+        leftElement={
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={handleLogout}
+            accessibilityLabel="לחץ כאן כדי להתנתק">
+            <Icon name="logout" size={24} color="#FFD700" />
+          </TouchableOpacity>
+        }
+      />
 
-        <Text style={styles.headerTitle} variant="h4">ברוכים הבאים</Text>
-
-        <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={handleLogout}
-          accessibilityLabel="לחץ כאן כדי להתנתק">
-          <Icon name="logout" size="large" color="#FFD700" />
-        </TouchableOpacity>
-      </View>
+      {/* Active Game Banner - shows when there's an active game */}
+      <ActiveGameBanner />
 
       {/* Main Content Container - padding at bottom for footer */}
       <View style={styles.mainContentContainer}>
@@ -613,67 +613,32 @@ export default function HomeScreen() {
           style={styles.scrollContainer}
           contentContainerStyle={{
             padding: 16,
-            paddingBottom: 140, // Extra padding at the bottom
+            paddingBottom: 40, // פחות padding כי כבר אין footer
           }}
         >
-          {/* Group Statistics Cards */}
-          {groupStats.length > 0 && (
-            <>
-              {groupStats.map((group) => (
-                <Card key={group.groupId} style={styles.groupCard}>
-                  <Text style={styles.groupTitle}>{group.groupName}</Text>
-                  
-                  <View style={styles.groupStatsContainer}>
-                    <StatCard
-                      title="מספר משחקים"
-                      value={group.gamesPlayed}
-                      icon="cards-playing-outline"
-                      size="small"
-                      style={styles.groupStatCard}
-                    />
-                    
-                    <StatCard
-                      title="מספר שחקנים"
-                      value={group.mostFrequentPlayers.length}
-                      icon="account-group"
-                      size="small"
-                      style={styles.groupStatCard}
-                    />
-                    
-                    <StatCard
-                      title="סה״כ קניות"
-                      value={group.totalMoney}
-                      icon="cash"
-                      format="currency"
-                      size="small"
-                      style={styles.groupStatCard}
-                    />
-                    
-                    <StatCard
-                      title="רווח מקסימלי"
-                      value={winnersLosersStats?.biggestWin?.amount || 0}
-                      icon="trophy"
-                      format="currency"
-                      valueColor={CASINO_COLORS.gold}
-                      size="small"
-                      style={styles.groupStatCard}
-                    />
-                  </View>
-                </Card>
-              ))}
-            </>
-          )}
+          
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('src/assets/images/poker-logo.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          
+          {/* כפתור התחל משחק חדש - מתחת לתמונה */}
+          <View style={styles.newGameButtonContainer}>
+            {canStartNewGame() && (
+              <Button
+                title="התחל משחק חדש"
+                variant="primary"
+                icon="cards-playing-outline"
+                iconColor="#FFD700"
+                textStyle={{ color: "#FFD700", fontWeight: "bold" }}
+                onPress={() => router.push('/gameFlow/NewGameSetup')}
+              />
+            )}
+          </View>
         </ScrollView>
-      </View>
-
-      {/* Footer – כפתור קבוע */}
-      <View style={styles.footer}>
-        <Button
-          title="התחל משחק חדש"
-          variant="primary"
-          icon="cards-playing-outline"
-          onPress={() => router.push('/gameFlow/NewGameSetup')}
-        />
       </View>
     </View>
   );
@@ -720,7 +685,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 8,
   },
   greeting: {
     fontSize: 18,
@@ -747,6 +713,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   welcomeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 20,
   },
   statsCard: {
     backgroundColor: CASINO_COLORS.surface,
@@ -766,11 +737,6 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     marginTop: 4,
     fontSize: 18,
-  },
-  groupCard: {
-    backgroundColor: '#1C2C2E',
-    marginBottom: 16,
-    padding: 16,
   },
   groupCardHeader: {
     marginBottom: 8,
@@ -823,13 +789,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFD700',
     borderWidth: 2,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFD700',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
   headerSubtitle: {
     fontSize: 16,
     color: '#FFD700',
@@ -846,14 +805,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'right',
   },
-  groupCard: {
-    backgroundColor: CASINO_COLORS.surface,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: CASINO_COLORS.gold,
-  },
   groupTitle: {
     color: CASINO_COLORS.gold,
     fontSize: 16,
@@ -869,5 +820,22 @@ const styles = StyleSheet.create({
   groupStatCard: {
     width: '48%',
     marginBottom: 8,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    width: '100%',
+  },
+  logo: {
+    width: '90%',
+    height: 300,
+  },
+  newGameButtonContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 15,
+    marginBottom: 30,
   },
 });

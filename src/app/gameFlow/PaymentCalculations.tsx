@@ -1,15 +1,22 @@
 // src/app/gameFlow/PaymentCalculations.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, ActivityIndicator, TouchableOpacity, BackHandler } from 'react-native';
 import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
+import { Icon } from '@/components/common/Icon';
+import { Dialog } from '@/components/common/Dialog';
+import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
 import { useRouter } from 'expo-router';
-import { useGameContext } from '@/contexts/GameContext';
-import { saveGameSnapshot } from '@/services/gameSnapshot';
+import { useGameContext, GameData } from '@/contexts/GameContext';
+import { saveOrUpdateActiveGame } from '@/services/gameSnapshot';
 import { getAllActivePaymentUnits } from '@/services/paymentUnits';
 import { validateGameDate, formatGameDate } from '@/utils/dateUtils';
 import { useAuth } from '@/contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import gameDataManager from '@/services/gameDataManager';
+import { clearStatsCache } from '@/services/statistics/statisticsService';
+import NetInfo from '@react-native-community/netinfo';
 
 interface PaymentEntity {
   id: string;
@@ -27,11 +34,57 @@ interface Payment {
 
 export default function PaymentCalculations() {
   const router = useRouter();
-  const { gameData, setGameData, updateGameStatus } = useGameContext();
+  const { gameData, setGameData, updateGameStatus, clearActiveGame, shouldUpdateStatus, canUserContinueThisGame } = useGameContext();
   const [optimizedPayments, setOptimizedPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showExitDialog, setShowExitDialog] = useState(false);
   const { canManageEntity } = useAuth();
+
+  // בדיקת הרשאות להמשך המשחק
+  const canContinue = canUserContinueThisGame(gameData);
+
+  // פונקציה לרענון נתוני ההיסטוריה והסטטיסטיקות אחרי השלמת המשחק
+  const refreshDataAfterGameCompletion = async () => {
+    try {
+      console.log('PaymentCalculations: Starting data refresh after game completion...');
+      
+      // בדיקת מצב החיבור לרשת
+      const netInfo = await NetInfo.fetch();
+      const isConnected = netInfo.isConnected;
+      
+      if (isConnected) {
+        console.log('PaymentCalculations: Online - refreshing from Firestore');
+        
+        // במצב ONLINE - רענן מ-Firestore
+        // ניקוי מטמון ההיסטוריה
+        gameDataManager.clearGamesCache();
+        
+        // ניקוי מטמון הסטטיסטיקות
+        clearStatsCache();
+        
+        // טעינה מחדש מ-Firestore (יתבצע ברקע)
+        gameDataManager.fetchAllGames({ skipCache: true, onlyCompleted: true })
+          .then(games => {
+            console.log(`PaymentCalculations: Successfully refreshed ${games.length} games from Firestore`);
+          })
+          .catch(error => {
+            console.error('PaymentCalculations: Error refreshing games from Firestore:', error);
+          });
+        
+      } else {
+        console.log('PaymentCalculations: Offline - updating local cache');
+        
+        // במצב OFFLINE - עדכן מטמון מקומי
+        // הוסף את המשחק החדש למטמון המקומי
+        // (זה יתבצע אוטומטיט כשהחיבור יחזור)
+        console.log('PaymentCalculations: Game will be synced when connection is restored');
+      }
+      
+    } catch (error) {
+      console.error('PaymentCalculations: Error refreshing data after game completion:', error);
+    }
+  };
 
   // Group players by payment units
   useEffect(() => {
@@ -131,6 +184,22 @@ export default function PaymentCalculations() {
     return payments;
   };
 
+  // הסרת עדכון אוטומטי של סטטוס - נעשה באופן ידני במקומות המתאימים
+
+  // Handle hardware back press
+  useEffect(() => {
+    const backAction = () => {
+      setShowExitDialog(true);
+      return true; // Prevent default behavior (exiting the app)
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+    return () => backHandler.remove();
+  }, []);
+
   // Group payments by payer for display
   const groupedPayments = useMemo(() => {
     const groups = new Map<string, Payment[]>();
@@ -150,42 +219,45 @@ export default function PaymentCalculations() {
   }, [optimizedPayments]);
 
   const handleFinishGame = async () => {
+    // הגנה מפני קריאות כפולות
+    if (loading) {
+      console.log('PaymentCalculations: handleFinishGame already in progress, ignoring');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Starting game save...');
+      console.log('PaymentCalculations: Starting game completion process...');
       
       // Validate the game date before saving
       const validatedGameDate = validateGameDate(gameData.gameDate);
-      console.log('Validated game date:', validatedGameDate);
+      console.log('PaymentCalculations: Validated game date:', validatedGameDate);
       
       // Update game status and payments with validated date
       const finalGameData = {
         ...gameData,
-        gameDate: validatedGameDate, // Use validated date
-        status: 'completed',
+        gameDate: validatedGameDate,
+        status: 'completed' as const,
         payments: optimizedPayments.map(p => ({
           from: {
-            userId: p.from.type === 'player' ? p.from.id : null,
-            unitId: p.from.type === 'unit' ? p.from.id : null
+            userId: p.from.type === 'player' ? p.from.id : undefined,
+            unitId: p.from.type === 'unit' ? p.from.id : undefined 
           },
           to: {
-            userId: p.to.type === 'player' ? p.to.id : null,
-            unitId: p.to.type === 'unit' ? p.to.id : null
+            userId: p.to.type === 'player' ? p.to.id : undefined,
+            unitId: p.to.type === 'unit' ? p.to.id : undefined 
           },
           amount: p.amount
         }))
       };
 
-      console.log('Game data with validated date:', JSON.stringify(finalGameData.gameDate, null, 2));
+      console.log('PaymentCalculations: Game data prepared for saving');
       
       // Clean the data before saving
       const cleanGameData = JSON.parse(JSON.stringify(finalGameData));
       
-      // Save to Firebase
-      console.log('Saving game data to Firebase...');
-
       // בדיקה שיש למשתמש הרשאות לשמור משחק
       if (!canManageEntity('game')) {
         Alert.alert(
@@ -193,21 +265,37 @@ export default function PaymentCalculations() {
           "אין לך הרשאות לשמור משחק. יש צורך בהרשאות מנהל או סופר.",
           [{ text: "הבנתי" }]
         );
-        console.error("User does not have permission to save games");
-        throw new Error("אין הרשאות מתאימות לשמירת משחק");
+        console.error("PaymentCalculations: User does not have permission to save games");
+        setLoading(false);
+        return;
       }
 
-      await saveGameSnapshot(cleanGameData);
+      // Save to Firebase
+      console.log('PaymentCalculations: Saving game data to Firebase...');
+      await saveOrUpdateActiveGame(cleanGameData);
 
-      // Update local state
+      // Update local state in one atomic operation
       setGameData(finalGameData);
-      updateGameStatus('completed');
+
+      console.log('PaymentCalculations: Game saved successfully, starting cleanup...');
+
+      // Clear active game ID from AsyncStorage first
+      await AsyncStorage.removeItem('active_game_id');
+
+      // Clear active game since it's now completed
+      await clearActiveGame();
+
+      // רענון נתוני ההיסטוריה והסטטיסטיקות אחרי שמירת המשחק
+      console.log('PaymentCalculations: Refreshing history and statistics data...');
+      await refreshDataAfterGameCompletion();
+
+      console.log('PaymentCalculations: Cleanup completed, navigating home...');
 
       // Navigate home
-      router.push('/(tabs)/home');
+      router.push('/(tabs)/home2');
 
     } catch (error) {
-      console.error('Error finishing game:', error);
+      console.error('PaymentCalculations: Error finishing game:', error);
       setError('שגיאה בשמירת המשחק');
       setLoading(false);
     }
@@ -220,6 +308,13 @@ export default function PaymentCalculations() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Back Button */}
+        <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.backButton}>
+           <Icon name="arrow-right" size={24} color="#FFD700" />
+        </TouchableOpacity>
+        
+        {/* Header Content */}
+        <View style={styles.headerContent}>
         <Text variant="h4" style={styles.headerTitle}>
           חישוב תשלומים
         </Text>
@@ -229,7 +324,20 @@ export default function PaymentCalculations() {
         <Text style={styles.headerSubtitle}>
           {displayDate}
         </Text>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={async () => {
+            await AsyncStorage.removeItem('active_game_id');
+            router.push('/(tabs)/home2');
+          }} 
+          style={styles.homeButton}
+        >
+          <Icon name="home" size={24} color="#FFD700" />
+        </TouchableOpacity>
       </View>
+
+      <ReadOnlyIndicator />
 
       {error && (
         <View style={styles.errorContainer}>
@@ -270,14 +378,30 @@ export default function PaymentCalculations() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
-        <Button
-          title={loading ? "מסיים משחק..." : "סיים משחק"}
-          onPress={handleFinishGame}
-          style={styles.finishButton}
-          disabled={loading}
-        />
-      </View>
+      {canContinue && (
+        <View style={styles.footer}>
+          <Button
+            title={loading ? "מסיים משחק..." : "סיים משחק"}
+            onPress={handleFinishGame}
+            style={styles.finishButton}
+            disabled={loading}
+          />
+        </View>
+      )}
+      
+      {/* Exit Confirmation Dialog */}
+      <Dialog
+        visible={showExitDialog}
+        title="חזרה למסך הקודם"
+        message="האם אתה בטוח שברצונך לחזור למסך הקודם?"
+        onCancel={() => setShowExitDialog(false)}
+        onConfirm={() => {
+          setShowExitDialog(false);
+          router.back(); // פשוט חזרה למסך הקודם במחסנית הניווט
+        }}
+        confirmText="כן, חזור"
+        cancelText="לא, המשך כאן"
+      />
     </View>
   );
 }
@@ -288,10 +412,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
     borderBottomWidth: 2,
     borderBottomColor: '#FFD700',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8, 
+  },
+  headerContent: {
+    flex: 1, 
+    alignItems: 'center', 
   },
   headerTitle: {
     color: '#FFD700',
@@ -380,5 +519,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#35654d',
     borderColor: '#FFD700',
     borderWidth: 2,
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 });

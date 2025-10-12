@@ -11,9 +11,9 @@ import {
   calculatePlayerRanking,
   PlayerStatsParams,
   PlayerStatsResult,
-  PlayerRankingParams,
-  PlayerRankingResult
+  PlayerRankingParams
 } from '../index';
+import { PlayerRankingResult as CorePlayerRankingResult } from '../core/types';
 
 /**
  * חישוב סך כל הרווח של שחקן
@@ -141,6 +141,56 @@ export function calculateAverageProfitPerGame(
 }
 
 /**
+ * חישוב סך כל הריבאיים שהשחקן ביצע
+ * @param userId מזהה השחקן
+ * @param games רשימת משחקים
+ * @param timeFilter סינון לפי זמן (אופציונלי)
+ * @param groupId סינון לפי קבוצה (אופציונלי)
+ * @returns סך כל הריבאיים
+ */
+export function calculateTotalRebuys(
+  userId: string, 
+  games: Game[], 
+  timeFilter?: string, 
+  groupId?: string
+): number {
+  const params: PlayerStatsParams = {
+    userId,
+    games,
+    timeFilter,
+    groupId
+  };
+  
+  const result = calculatePlayerStats(params);
+  return result.data.totalRebuys;
+}
+
+/**
+ * חישוב ממוצע הריבאיים למשחק
+ * @param userId מזהה השחקן
+ * @param games רשימת משחקים
+ * @param timeFilter סינון לפי זמן (אופציונלי)
+ * @param groupId סינון לפי קבוצה (אופציונלי)
+ * @returns ממוצע ריבאיים למשחק
+ */
+export function calculateAverageRebuysPerGame(
+  userId: string, 
+  games: Game[], 
+  timeFilter?: string, 
+  groupId?: string
+): number {
+  const params: PlayerStatsParams = {
+    userId,
+    games,
+    timeFilter,
+    groupId
+  };
+  
+  const result = calculatePlayerStats(params);
+  return result.data.averageRebuysPerGame;
+}
+
+/**
  * חישוב דירוג שחקנים לפי רווח כולל
  * @param games רשימת משחקים
  * @param users רשימת משתמשים
@@ -155,7 +205,7 @@ export function calculatePlayerRankingByProfit(
   timeFilter?: string, 
   groupId?: string,
   limit?: number
-): any[] {
+): CorePlayerRankingResult[] {
   const params: PlayerRankingParams = {
     games,
     users,
@@ -167,7 +217,19 @@ export function calculatePlayerRankingByProfit(
   };
   
   const result = calculatePlayerRanking(params);
-  return result.data;
+  
+  // המרה מטיפוס הישן לטיפוס החדש
+  return result.data.map(player => ({
+    userId: player.userId,
+    displayName: player.name,  // התאמת שם השדה
+    totalGames: player.gamesPlayed,  // התאמת שם השדה
+    profilePicture: '',  // שדה חסר, מאתחל כריק
+    totalProfit: player.totalProfit,
+    averageProfit: player.averageProfit,
+    gamesWon: player.gamesWon,
+    winRate: player.winRate,
+    rank: player.rank
+  }));
 }
 
 /**
@@ -185,7 +247,7 @@ export function calculatePlayerRankingByAverageProfit(
   timeFilter?: string, 
   groupId?: string,
   limit?: number
-): any[] {
+): CorePlayerRankingResult[] {
   const params: PlayerRankingParams = {
     games,
     users,
@@ -197,7 +259,19 @@ export function calculatePlayerRankingByAverageProfit(
   };
   
   const result = calculatePlayerRanking(params);
-  return result.data;
+  
+  // המרה מטיפוס הישן לטיפוס החדש
+  return result.data.map(player => ({
+    userId: player.userId,
+    displayName: player.name,  // התאמת שם השדה
+    totalGames: player.gamesPlayed,  // התאמת שם השדה
+    profilePicture: '',  // שדה חסר, מאתחל כריק
+    totalProfit: player.totalProfit,
+    averageProfit: player.averageProfit,
+    gamesWon: player.gamesWon,
+    winRate: player.winRate,
+    rank: player.rank
+  }));
 }
 
 /**
@@ -222,7 +296,15 @@ export function getPlayerStatistics(
   };
   
   const result = calculatePlayerStats(params);
-  return result.data;
+  
+  // התאמה לטיפוס PlayerStatsResult מהקובץ core/types.ts
+  return {
+    ...result.data,
+    // הוספת שדות חסרים עם ערכים ברירת מחדל
+    profitStdDev: 0,  // סטיית תקן של רווח - ברירת מחדל
+    longestLoseStreak: result.data.longestLossStreak || 0,  // התאמה בין שמות שדות שונים
+    currentWinStreak: 0  // רצף ניצחונות נוכחי - ברירת מחדל
+  };
 }
 
 /**
@@ -244,7 +326,7 @@ export function getPlayerRankings(
   timeFilter?: string, 
   groupId?: string,
   limit?: number
-): PlayerRankingResult[] {
+): CorePlayerRankingResult[] {
   const params: PlayerRankingParams = {
     games,
     users,
@@ -256,5 +338,17 @@ export function getPlayerRankings(
   };
   
   const result = calculatePlayerRanking(params);
-  return result.data;
+  
+  // המרה מטיפוס הישן לטיפוס החדש
+  return result.data.map(player => ({
+    userId: player.userId,
+    displayName: player.name,  // התאמת שם השדה
+    totalGames: player.gamesPlayed,  // התאמת שם השדה
+    profilePicture: '',  // שדה חסר, מאתחל כריק
+    totalProfit: player.totalProfit,
+    averageProfit: player.averageProfit,
+    gamesWon: player.gamesWon,
+    winRate: player.winRate,
+    rank: player.rank
+  }));
 } 

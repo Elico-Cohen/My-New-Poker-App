@@ -5,7 +5,6 @@ import { UserProfile } from '@/models/UserProfile';
 import { Game, GameDate } from '@/models/Game';
 import { Group } from '@/models/Group';
 import { PaymentUnit } from '@/models/PaymentUnit';
-import { clearStatsCache } from '@/services/statistics/statisticsService';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { notificationService, EventType } from '@/services/NotificationService';
 
@@ -566,9 +565,6 @@ class SyncService {
           if (updates.length > 0) {
             store.updateGames(updates);
             console.log(`SyncService: עודכנו ${updates.length} משחקים`);
-            
-            // ניקוי מטמון הסטטיסטיקות בכל פעם שמשחקים מתעדכנים
-            clearStatsCache();
           }
         } catch (error) {
           console.error('SyncService: שגיאה בעדכון משחקים:', error);
@@ -662,6 +658,13 @@ class SyncService {
   }
   
   /**
+   * בדיקת מצב האתחול
+   */
+  public getIsInitialized(): boolean {
+    return this.isInitialized;
+  }
+  
+  /**
    * אילוץ רענון נתונים מסוג מסוים
    */
   public async refreshData(dataType: DataType): Promise<void> {
@@ -688,16 +691,16 @@ class SyncService {
     try {
       switch (dataType) {
         case 'users':
-          await this.loadUsers({ includeInactive: true });
+          await this.loadUsers({ includeInactive: true, forceRefresh: true });
           break;
         case 'games':
-          await this.loadGames({ includeInactive: true });
+          await this.loadGames({ forceRefresh: true });
           break;
         case 'groups':
-          await this.loadGroups({ includeInactive: true });
+          await this.loadGroups({ includeInactive: true, forceRefresh: true });
           break;
         case 'paymentUnits':
-          await this.loadPaymentUnits({ includeInactive: true });
+          await this.loadPaymentUnits({ includeInactive: true, forceRefresh: true });
           break;
       }
       
@@ -717,9 +720,6 @@ class SyncService {
     }
     
     console.log('SyncService: מבצע רענון נתונים מאולץ מ-Firebase');
-    
-    // מנקה את מטמון הסטטיסטיקות
-    clearStatsCache();
     
     try {
       // טעינת כל סוגי הנתונים במקביל

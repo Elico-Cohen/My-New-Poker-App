@@ -4,6 +4,7 @@ import {
   Modal as RNModal,
   View,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
   StyleProp,
   ViewStyle,
@@ -45,47 +46,45 @@ export function Modal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View 
-          style={[
-            styles.container,
-            {
-              backgroundColor: CASINO_COLORS.background,
-              borderColor: CASINO_COLORS.gold,
-            },
-            style
-          ]}
-          // Add this onPress handler to stop event propagation
-          onStartShouldSetResponder={() => true}
-          onTouchEnd={(e) => {
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback onPress={(e) => {
+            // עצירת בועת האירוע כדי שלא יגיע ל-onPress של המיכל החיצוני
             e.stopPropagation();
-          }}
-        >
-          {title && (
-            <View style={[
-              styles.header,
-              { borderBottomColor: CASINO_COLORS.gold }
-            ]}>
-              <Text 
-                variant="h4" 
-                style={[styles.title, { color: CASINO_COLORS.gold }]}
-              >
-                {title}
-              </Text>
+          }}>
+            <View 
+              style={[
+                styles.container,
+                {
+                  backgroundColor: CASINO_COLORS.background,
+                  borderColor: CASINO_COLORS.gold,
+                },
+                style
+              ]}
+            >
+              {title && (
+                <View style={[
+                  styles.header,
+                  { borderBottomColor: CASINO_COLORS.gold }
+                ]}>
+                  <Text 
+                    variant="h4" 
+                    style={[styles.title, { color: CASINO_COLORS.gold }]}
+                  >
+                    {title}
+                  </Text>
+                </View>
+              )}
+              <View style={[
+                styles.content,
+                { backgroundColor: CASINO_COLORS.background }
+              ]}>
+                {children}
+              </View>
             </View>
-          )}
-          <View style={[
-            styles.content,
-            { backgroundColor: CASINO_COLORS.background }
-          ]}>
-            {children}
-          </View>
+          </TouchableWithoutFeedback>
         </View>
-      </TouchableOpacity>
+      </TouchableWithoutFeedback>
     </RNModal>
   );
 }
@@ -99,7 +98,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   container: {
-    width: '100%',
+    width: '90%',
     maxWidth: 500,
     borderRadius: 12,
     borderWidth: 1,

@@ -1,11 +1,18 @@
 import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db, auth } from '@/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const MIGRATION_KEY = 'game_dates_migration_completed';
 
 export async function migrateGameDates() {
   try {
+    // בדיקה שהמשתמש מחובר
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.log('Game dates migration skipped - user not authenticated');
+      return;
+    }
+
     // Check if migration has already run
     const migrationCompleted = await AsyncStorage.getItem(MIGRATION_KEY);
     if (migrationCompleted === 'true') {
@@ -18,14 +25,19 @@ export async function migrateGameDates() {
     const snapshot = await getDocs(gamesCollection);
     
     let migratedCount = 0;
-    const updates = snapshot.docs.map(async (gameDoc) => {
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    // Process games one by one to handle errors individually
+    for (const gameDoc of snapshot.docs) {
+      try {
       const gameData = gameDoc.data();
       
       // Skip if already in correct format
       if (gameData.date && 
           typeof gameData.date === 'object' && 
           'year' in gameData.date) {
-        return;
+          continue;
       }
 
       // Create new date format
@@ -42,15 +54,33 @@ export async function migrateGameDates() {
         date: newDate
       });
       migratedCount++;
-    });
+        
+        // Log progress every 10 games
+        if (migratedCount % 10 === 0) {
+          console.log(`Migrated ${migratedCount} games so far...`);
+        }
+      } catch (error: any) {
+        errorCount++;
+        const errorMessage = `Error migrating game ${gameDoc.id}: ${error.message}`;
+        console.error(errorMessage);
+        errors.push(errorMessage);
+      }
+    }
 
-    await Promise.all(updates);
     console.log(`Migration completed. Updated ${migratedCount} documents.`);
+    if (errorCount > 0) {
+      console.error(`Failed to migrate ${errorCount} documents.`);
+      console.error('Errors:', errors);
+    }
 
-    // Mark migration as completed
+    // Mark migration as completed only if all games were processed successfully
+    if (errorCount === 0) {
     await AsyncStorage.setItem(MIGRATION_KEY, 'true');
+    } else {
+      console.warn('Migration completed with errors. Will retry on next run.');
+    }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error during game dates migration:', error);
   }
 }

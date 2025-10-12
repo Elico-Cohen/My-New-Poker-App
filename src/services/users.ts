@@ -62,6 +62,8 @@ export const createUser = async (userData: Omit<UserProfile, 'id' | 'createdAt' 
   const now = Date.now();
   const newUser = {
     ...userData,
+    email: userData.email || null,
+    authUid: userData.authUid || null,
     isActive: true,
     createdAt: now,
     updatedAt: now

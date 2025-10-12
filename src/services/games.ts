@@ -13,7 +13,6 @@ import {
 import { Group } from '@/models/Group';
 import { getGroupById } from './groups';
 import { verifyAccessControl } from '@/utils/securityAudit';
-import { useAuth } from '@/contexts/AuthContext';
 import { getLocalGames } from './gameSnapshot';
 
 // Collection reference
@@ -22,7 +21,8 @@ const gamesCollection = collection(db, 'games');
 // Create a new game
 export const createGame = async (
   groupId: string,
-  date: GameDate
+  date: GameDate,
+  userId?: string
 ): Promise<string> => {
   const group = await getGroupById(groupId);
   if (!group) throw new Error('Group not found');
@@ -67,13 +67,17 @@ export const createGame = async (
     buyInSnapshot: { ...group.buyIn },
     rebuySnapshot: { ...group.rebuy },
     players: [],
+    playerUids: [],
     rebuyLogs: [],
     createdAt: now,
     updatedAt: now,
-    createdBy: currentUser.uid,
+    createdBy: userId || currentUser.uid,
     // העברת נתוני חוק 80% מהקבוצה – הערכים הללו קיימים במסמך הקבוצה (Group)
     useRoundingRule: group.useRoundingRule,
-    roundingRulePercentage: group.roundingRulePercentage,
+    roundingRulePercentage: group.roundingRulePercentage || 0,
+    openGamesCount: 0,
+    totalWins: 0,
+    totalLosses: 0,
   };
   
   try {
@@ -155,7 +159,7 @@ export const getGamesByGroup = async (groupId: string): Promise<Game[]> => {
   } as Game));
   
   // מיון המשחקים לפי תאריך (timestamp) בסדר יורד
-  return games.sort((a, b) => b.date.timestamp - a.date.timestamp);
+  return games.sort((a, b) => (b.date?.timestamp || 0) - (a.date?.timestamp || 0));
 };
 
 // Add player to game
@@ -171,17 +175,21 @@ export const addPlayerToGame = async (
     throw new Error('Cannot add players to non-active game');
   }
   
-  if (!game.players.some(p => p.userId === userId)) {
+  const currentPlayers = game.players || [];
+  const currentPlayerUids = game.playerUids || [];
+
+  if (!currentPlayers.some(p => p.userId === userId)) {
     const newPlayer: PlayerInGame = {
       userId,
       name: playerName,
-      buyInCount: 1,    // Initial buy-in
+      buyInCount: 1,
       rebuyCount: 0
     };
     
     const gameRef = doc(db, 'games', gameId);
     await updateDoc(gameRef, {
-      players: [...game.players, newPlayer],
+      players: [...currentPlayers, newPlayer],
+      playerUids: [...currentPlayerUids, userId],
       updatedAt: Date.now()
     });
   }
@@ -190,20 +198,22 @@ export const addPlayerToGame = async (
 // Add rebuy for player
 export const addRebuy = async (gameId: string, playerId: string): Promise<void> => {
   const game = await getGameById(gameId);
-  if (!game) throw new Error('Game not found');
+  if (!game) throw new Error('Game not found for addRebuy');
+  
+  // Initialize players to an empty array if undefined
+  const players = game.players || [];
   
   if (game.status !== 'active') {
     throw new Error('Cannot add rebuy to non-active game');
   }
   
   const gameRef = doc(db, 'games', gameId);
-  const playerIndex = game.players.findIndex(p => p.userId === playerId);
+  const playerIndex = players.findIndex(p => p.userId === playerId);
   
   if (playerIndex === -1) {
     throw new Error('Player not found in game');
   }
 
-  // Create new rebuy log entry
   const rebuyLog: RebuyLog = {
     id: `${gameId}-${playerId}-${Date.now()}`,
     playerId,
@@ -211,14 +221,12 @@ export const addRebuy = async (gameId: string, playerId: string): Promise<void> 
     timestamp: Date.now()
   };
 
-  // Update player's rebuy count
-  const updatedPlayers = [...game.players];
+  const updatedPlayers = [...players];
   updatedPlayers[playerIndex] = {
     ...updatedPlayers[playerIndex],
     rebuyCount: (updatedPlayers[playerIndex].rebuyCount || 0) + 1
   };
 
-  // Update game document
   await updateDoc(gameRef, {
     players: updatedPlayers,
     rebuyLogs: [...(game.rebuyLogs || []), rebuyLog],
@@ -236,13 +244,14 @@ export const removeRebuy = async (gameId: string, playerId: string): Promise<voi
   }
   
   const gameRef = doc(db, 'games', gameId);
-  const playerIndex = game.players.findIndex(p => p.userId === playerId);
+  const players = game.players || [];
+  const playerIndex = players.findIndex(p => p.userId === playerId);
   
   if (playerIndex === -1) {
     throw new Error('Player not found in game');
   }
   
-  if (!game.players[playerIndex].rebuyCount) {
+  if (!players[playerIndex].rebuyCount) {
     throw new Error('Player has no rebuys to remove');
   }
   
@@ -255,7 +264,7 @@ export const removeRebuy = async (gameId: string, playerId: string): Promise<voi
   };
   
   // Update player's rebuy count
-  const updatedPlayers = [...game.players];
+  const updatedPlayers = [...players];
   updatedPlayers[playerIndex] = {
     ...updatedPlayers[playerIndex],
     rebuyCount: updatedPlayers[playerIndex].rebuyCount - 1
@@ -282,7 +291,8 @@ export const getPlayerRebuyCount = async (gameId: string, playerId: string): Pro
   const game = await getGameById(gameId);
   if (!game) throw new Error('Game not found');
   
-  const player = game.players.find(p => p.userId === playerId);
+  const players = game.players || [];
+  const player = players.find(p => p.userId === playerId);
   if (!player) throw new Error('Player not found in game');
   
   return player.rebuyCount || 0;
@@ -341,7 +351,8 @@ export const calculateInitialResults = async (
   });
 
   // Update players with remaining chips and calculate exact values
-  const updatedPlayers = game.players.map(player => {
+  const players = game.players || [];
+  const updatedPlayers = players.map(player => {
     const playerResult = playerChips.find(p => p.playerId === player.userId);
     if (!playerResult) {
       throw new Error(`Missing chips data for player ${player.name}`);
@@ -409,21 +420,23 @@ export const calculateInitialResults = async (
 // Add open game winner
 export const addOpenGameWinner = async (gameId: string, openGameId: number, winnerId: string): Promise<void> => {
   const game = await getGameById(gameId);
-  if (!game) throw new Error('Game not found');
+  if (!game) throw new Error('Game not found for addOpenGameWinner');
+  
+  const players = game.players || [];
   
   if (game.status !== 'open_games') {
     throw new Error('Game is not in open games stage');
   }
   
   // Create new open game record
-  const openGame: OpenGame = {
+  const openGameEntry: OpenGame = {
     id: openGameId,
     winner: winnerId,
     createdAt: Date.now()
   };
   
   // Update player's open game wins count
-  const updatedPlayers = game.players.map(player => ({
+  const updatedPlayers = players.map(player => ({
     ...player,
     openGameWins: player.userId === winnerId 
       ? (player.openGameWins || 0) + 1 
@@ -431,8 +444,8 @@ export const addOpenGameWinner = async (gameId: string, openGameId: number, winn
   }));
   
   // Check if all open games are completed
-  const currentOpenGames = [...(game.openGames || []), openGame];
-  const allOpenGamesCompleted = currentOpenGames.length === game.openGamesCount;
+  const currentOpenGames = [...(game.openGames || []), openGameEntry];
+  const allOpenGamesCompleted = currentOpenGames.length === (game.openGamesCount || 0);
   
   // Update game
   const gameRef = doc(db, 'games', gameId);
@@ -452,11 +465,13 @@ export const addOpenGameWinner = async (gameId: string, openGameId: number, winn
 // Calculate final results including payments
 export const calculateFinalResults = async (gameId: string): Promise<void> => {
   const game = await getGameById(gameId);
-  if (!game) throw new Error('Game not found');
+  if (!game) throw new Error('Game not found for calculateFinalResults');
+  
+  const players = game.players || [];
   
   // Calculate final results for each player
-  const playersWithFinalResults = game.players.map(player => {
-    const openGameWinnings = (player.openGameWins || 0) * game.rebuySnapshot.amount;
+  const playersWithFinalResults = players.map(player => {
+    const openGameWinnings = (player.openGameWins || 0) * (game.rebuySnapshot?.amount || 0);
     return {
       ...player,
       finalResultMoney: (player.resultBeforeOpenGames || 0) + openGameWinnings
@@ -470,17 +485,17 @@ export const calculateFinalResults = async (gameId: string): Promise<void> => {
   
   // Calculate optimal payments
   const payments: Payment[] = [];
-  let winners = sortedPlayers.filter(p => p.finalResultMoney > 0);
-  let losers = sortedPlayers.filter(p => p.finalResultMoney < 0);
+  let winners = sortedPlayers.filter(p => (p.finalResultMoney || 0) > 0);
+  let losers = sortedPlayers.filter(p => (p.finalResultMoney || 0) < 0);
   
   winners.forEach(winner => {
-    let remainingToReceive = winner.finalResultMoney;
+    let remainingToReceive = winner.finalResultMoney || 0;
     
     while (remainingToReceive > 0 && losers.length > 0) {
       const currentLoser = losers[0];
       const amountToPayFromLoser = Math.min(
         remainingToReceive,
-        Math.abs(currentLoser.finalResultMoney)
+        Math.abs(currentLoser.finalResultMoney || 0)
       );
   
       if (amountToPayFromLoser > 0) {
@@ -490,12 +505,13 @@ export const calculateFinalResults = async (gameId: string): Promise<void> => {
           amount: amountToPayFromLoser
         });
         remainingToReceive -= amountToPayFromLoser;
-        currentLoser.finalResultMoney += amountToPayFromLoser;
+        currentLoser.finalResultMoney = (currentLoser.finalResultMoney || 0) + amountToPayFromLoser;
   
-        // Remove loser if they've paid everything
-        if (currentLoser.finalResultMoney === 0) {
+        if (Math.abs(currentLoser.finalResultMoney || 0) < 0.001) { // Check if effectively zero
           losers = losers.slice(1);
         }
+      } else {
+        break; // Avoid infinite loop if amountToPayFromLoser is 0
       }
     }
   });
@@ -514,19 +530,12 @@ export const calculateFinalResults = async (gameId: string): Promise<void> => {
 export const hasPlayerActiveGames = async (playerId: string): Promise<boolean> => {
   const q = query(
     gamesCollection,
-    where('status', 'in', ['active', 'ending', 'open_games'])
+    where('status', 'in', ['active', 'ending', 'open_games']),
+    where('playerUids', 'array-contains', playerId) // Query directly on playerUids
   );
   
   const querySnapshot = await getDocs(q);
-  const activeGames = querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  } as Game));
-
-  // Check if player exists in any active game's players array
-  return activeGames.some(game => 
-    game.players?.some(player => player.userId === playerId)
-  );
+  return !querySnapshot.empty; // If any documents are returned, the player has active games
 };
 
 // Delete game by ID
@@ -541,7 +550,7 @@ export const deleteGame = async (gameId: string): Promise<void> => {
     
     // 2. עדכון רשימת המשחקים האחרונים בקבוצה אם צריך
     if (game.groupId) {
-      await updateGroupRecentGames(game.groupId, gameId);
+      await updateGroupRecentGames(game.groupId, gameId, true);
     }
   } catch (error) {
     console.error('Error deleting game:', error);
@@ -550,50 +559,53 @@ export const deleteGame = async (gameId: string): Promise<void> => {
 };
 
 // Update group's recent games list after game deletion
-export const updateGroupRecentGames = async (groupId: string, deletedGameId: string): Promise<void> => {
+export const updateGroupRecentGames = async (groupId: string, gameId: string, gameDeleted: boolean = false): Promise<void> => {
   try {
     const groupRef = doc(db, 'groups', groupId);
     const groupSnap = await getDoc(groupRef);
     
     if (groupSnap.exists()) {
-      const groupData = groupSnap.data();
+      const groupData = groupSnap.data() as Group;
       
       // Check if the deleted game was in the recent games list
-      if (groupData.recentGames && groupData.recentGames.includes(deletedGameId)) {
-        // Remove the deleted game from the list
-        const updatedRecentGames = groupData.recentGames.filter(id => id !== deletedGameId);
+      let recentGames = groupData.recentGames || [];
+      if (gameDeleted) {
+        recentGames = recentGames.filter((id: string) => id !== gameId);
+      } else {
+        if (!recentGames.includes(gameId)) {
+          recentGames = [gameId, ...recentGames];
+        }
+      }
         
         // If we need to replace it with a new game
-        if (updatedRecentGames.length < groupData.recentGames.length) {
-          // Get games for this group that aren't already in the recent list
-          const q = query(
-            gamesCollection,
-            where('groupId', '==', groupId),
-            orderBy('createdAt', 'desc'),
-            limit(10)
-          );
-          
-          const querySnapshot = await getDocs(q);
-          const potentialReplacements = querySnapshot.docs
-            .map(doc => doc.id)
-            .filter(id => id !== deletedGameId && !updatedRecentGames.includes(id));
-          
-          // Add new games to replace the deleted one (up to the original length)
-          const neededGames = Math.min(
-            groupData.recentGames.length - updatedRecentGames.length,
-            potentialReplacements.length
-          );
-          
-          for (let i = 0; i < neededGames; i++) {
-            updatedRecentGames.push(potentialReplacements[i]);
-          }
+      if (recentGames.length > 5) {
+        // Remove the oldest game
+        recentGames = recentGames.slice(0, 5);
         }
         
         // Update the group document
-        await updateDoc(groupRef, { recentGames: updatedRecentGames });
-      }
+      await updateDoc(groupRef, { recentGames });
     }
   } catch (error) {
     console.error('Error updating group recent games:', error);
   }
+};
+
+// Get games by status
+export const getGamesByStatus = async (status: GameStatus | GameStatus[], count?: number): Promise<Game[]> => {
+  const statuses = Array.isArray(status) ? status : [status];
+  let q = query(gamesCollection, where('status', 'in', statuses), orderBy('date.timestamp', 'desc'));
+  if (count) {
+    q = query(q, limit(count));
+  }
+  const querySnapshot = await getDocs(q);
+  // Ensure date and timestamp exist for sorting, provide a default if not.
+  return querySnapshot.docs.map(docSnap => ({
+    id: docSnap.id,
+    ...docSnap.data()
+  } as Game)).sort((a, b) => {
+    const timeA = a.date?.timestamp || 0;
+    const timeB = b.date?.timestamp || 0;
+    return timeB - timeA;
+  });
 };

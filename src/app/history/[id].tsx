@@ -1,7 +1,7 @@
 // src/app/history/[id].tsx
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
@@ -15,6 +15,7 @@ import { PaymentUnit } from '@/models/PaymentUnit';
 import { UserProfile } from '@/models/UserProfile';
 import { Ionicons } from '@expo/vector-icons';
 import { DeleteGameDialog } from '@/components/games/DeleteGameDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CASINO_COLORS = {
   background: '#0D1B1E',
@@ -152,6 +153,7 @@ function PaymentRow({
 export default function GameDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { canDeleteEntity } = useAuth();
   
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
@@ -385,14 +387,31 @@ export default function GameDetailsScreen() {
   
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false, header: () => null }} />
+      
       {/* עדכון האייקונים לפי קומפוננט Icon הקיים */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={handleDeleteGame} 
-          style={styles.deleteButton}
-        >
-          <Icon name="delete" size="medium" color="#ef4444" />
-        </TouchableOpacity>
+        {canDeleteEntity('game') ? (
+          <TouchableOpacity 
+            onPress={handleDeleteGame} 
+            style={styles.deleteButton}
+          >
+            <Icon name="delete" size="medium" color="#ef4444" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            onPress={() => {
+              Alert.alert(
+                "אין הרשאה",
+                "רק מנהל מערכת יכול למחוק משחקים.",
+                [{ text: "הבנתי" }]
+              );
+            }}
+            style={[styles.deleteButton, { opacity: 0.5 }]}
+          >
+            <Icon name="delete" size="medium" color="#666" />
+          </TouchableOpacity>
+        )}
         
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>
@@ -400,7 +419,7 @@ export default function GameDetailsScreen() {
           </Text>
           
           <Text style={styles.headerSubtitle}>
-            {game ? formatDate(game.gameDate || game.date) : ''}
+            {game ? formatDate(game.date) : ''}
           </Text>
         </View>
         
@@ -421,7 +440,7 @@ export default function GameDetailsScreen() {
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>תאריך</Text>
-            <Text style={styles.summaryValue}>{formatDate(game.gameDate || game.date)}</Text>
+            <Text style={styles.summaryValue}>{formatDate(game.date)}</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>שחקנים</Text>
@@ -576,7 +595,7 @@ const PlayerResultCard = ({ player, game }: { player: PlayerInGame; game: Game }
   };
   
   // Calculate player investment
-  const calculatePlayerInvestment = (player) => {
+  const calculatePlayerInvestment = (player: PlayerInGame) => {
     const buyInTotal = (player.buyInCount || 0) * (game.buyInSnapshot?.amount || 0);
     const rebuyTotal = (player.rebuyCount || 0) * (game.rebuySnapshot?.amount || 0);
     return buyInTotal + rebuyTotal;
@@ -597,7 +616,6 @@ const PlayerResultCard = ({ player, game }: { player: PlayerInGame; game: Game }
     >
       <Card style={[
         styles.playerCard, 
-        player.isHighlighted ? styles.highlightedPlayer : null,
         expanded ? styles.expandedCard : null
       ]}>
         {/* Compact View (Always Visible) */}
@@ -633,7 +651,13 @@ const PlayerResultCard = ({ player, game }: { player: PlayerInGame; game: Game }
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>שווי צ'יפים</Text>
                   <Text style={styles.detailValue}>
-                    {(player.finalChipsValue || 0).toFixed(2)} ₪
+                    {(player.exactChipsValue || 0).toFixed(2)} ₪
+                  </Text>
+                </View>
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>צ'יפים נותרו</Text>
+                  <Text style={styles.detailValue}>
+                    {player.remainingChips || '0'}
                   </Text>
                 </View>
                 <View style={[styles.detailItem, styles.totalItem]}>

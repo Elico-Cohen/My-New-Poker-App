@@ -295,7 +295,7 @@ export default function GroupDetailsScreen() {
         <GroupDetailsForm
           initialData={group}
           onChange={handleFormChange}
-          error={error}
+          error={error || undefined}
         />
       </View>
 
@@ -324,9 +324,14 @@ export default function GroupDetailsScreen() {
         />
         <Button
           title="שמירה"
-          onPress={handleSave}
+          onPress={() => {
+            if (hasUnsavedChanges) {
+              handleSave();
+            } else {
+              router.push('/dashboard/groups');
+            }
+          }}
           loading={saving}
-          disabled={!hasUnsavedChanges}
           style={{
             backgroundColor: CASINO_COLORS.primary,
             borderColor: CASINO_COLORS.gold,

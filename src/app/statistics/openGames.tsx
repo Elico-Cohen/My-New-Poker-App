@@ -1,13 +1,14 @@
 // src/app/statistics/openGames.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
 import { Dropdown } from '@/components/common/Dropdown';
-import { getOpenGamesStatistics } from '@/services/statistics/openGamesStatistics';
+import { getOpenGamesStatistics } from '@/calculations/legacy/openGamesBridge';
 import { OpenGamesStats, StatisticsFilter } from '@/models/Statistics';
 import PlayersRanking from '@/components/statistics/PlayersRanking';
 import StatisticsChart from '@/components/statistics/StatisticsChart';
@@ -37,12 +38,17 @@ export default function OpenGamesScreen() {
   // הוקים לגישה לנתונים
   const { groups, loading: groupsLoading } = useGroups();
   
+  // שימוש ב-useRef כדי לשמור מידע על טעינת הנתונים בין רנדורים
+  const dataLoadedRef = useRef(false);
+  const isMountedRef = useRef(false);
+  const lastRefreshTimeRef = useRef(0);
+  
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<OpenGamesStats | null>(null);
   const [timeFilter, setTimeFilter] = useState<string>('all');
-  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [groupOptions, setGroupOptions] = useState<{ label: string, value: string }[]>([]);
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [gamesCount, setGamesCount] = useState(0);
@@ -59,9 +65,12 @@ export default function OpenGamesScreen() {
   // יצירת אפשרויות הקבוצה מהנתונים שהתקבלו מההוק
   useEffect(() => {
     if (groups && groups.length > 0) {
+      // סינון רק קבוצות פעילות
+      const activeGroups = groups.filter(group => group.isActive);
+      
       const options = [
         { label: 'כל הקבוצות', value: 'all' },
-        ...groups.map(group => ({
+        ...activeGroups.map(group => ({
           label: group.name,
           value: group.id
         }))
@@ -71,35 +80,58 @@ export default function OpenGamesScreen() {
   }, [groups]);
   
   // טעינת הנתונים לפי סינון
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     try {
+      // מונע טעינות כפולות קרובות מדי זו לזו
+      const now = Date.now();
+      const MIN_REFRESH_INTERVAL = 2000; // 2 שניות מינימום בין טעינות
+      
+      if (!forceRefresh && now - lastRefreshTimeRef.current < MIN_REFRESH_INTERVAL) {
+        console.log('OpenGamesScreen: דילוג על טעינה - חלף זמן קצר מדי מהטעינה האחרונה');
+        return;
+      }
+      
+      lastRefreshTimeRef.current = now;
+      
       setLoading(true);
       setError(null);
       
-      console.log('OpenGamesScreen: מנקה מטמון ומרענן נתונים מהשרת');
-      clearStatsCache();
-      await syncService.forceRefresh();
+      console.log('OpenGamesScreen: טוען סטטיסטיקות משחקים פתוחים');
+      
+      // אם זה רענון מאולץ, מנקה את המטמון
+      if (forceRefresh) {
+        console.log('OpenGamesScreen: ביצוע רענון מאולץ - מנקה מטמון');
+        clearStatsCache();
+        await syncService.forceRefresh();
+      }
       
       // יצירת אובייקט הסינון עם הערכים הנוכחיים
       const filter: StatisticsFilter = {
         timeFilter: timeFilter as 'all' | 'month' | 'quarter' | 'year',
         groupId: groupFilter !== 'all' ? groupFilter : undefined,
         // חשוב - לא קובעים statuses כדי לאפשר קבלת משחקים פתוחים מכל הסטטוסים
-        includeAllStatuses: true // מאפשר קבלת משחקים בכל הסטטוסים
+        includeAllStatuses: true, // מאפשר קבלת משחקים בכל הסטטוסים
+        // @ts-ignore - הוספת דגל לרענון מאולץ
+        _forceRefresh: forceRefresh // מציין שזהו רענון מאולץ
       };
       
       console.log('OpenGamesScreen: מבקש סטטיסטיקות משחקים פתוחים עם פילטר:', filter);
       
       // קבלת הנתונים מהשירות
       const stats = await getOpenGamesStatistics(filter);
+      
+      // הסבר מפורט יותר על הנתונים שהתקבלו
       console.log('OpenGamesScreen: התקבלו נתוני משחקים פתוחים:', {
-        totalOpenGames: stats.totalOpenGames,
-        topWinnersCount: stats.topWinners?.length || 0,
-        gamesCount: stats.gamesCount
+        gamesCount: `${stats.gamesCount} (סה"כ משחקים שעברו את הפילטר)`,
+        gamesWithOpenGames: `${stats.totalOpenGames ? stats.totalOpenGames : 0} משחקים פתוחים ב-${stats.topWinners?.length || 0} משחקים שונים`,
+        totalOpenGames: `${stats.totalOpenGames} (סה"כ משחקים פתוחים)`
       });
       
       setStats(stats);
       setGamesCount(stats.gamesCount || 0);
+      
+      // מעדכן שהנתונים נטענו בהצלחה
+      dataLoadedRef.current = true;
       
       console.log('OpenGamesScreen: התקבלו נתוני משחקים פתוחים בהצלחה');
     } catch (error) {
@@ -107,19 +139,62 @@ export default function OpenGamesScreen() {
       setError('שגיאה בטעינת הנתונים. נסה שוב.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
   
-  // טעינת הנתונים כאשר משתנים הפילטרים או כאשר מרעננים את המסך
+  // בדיקה האם יש צורך בטעינת נתונים
+  const checkAndLoadData = useCallback((force = false) => {
+    if (force || !dataLoadedRef.current) {
+      loadData(force);
+    }
+  }, [timeFilter, groupFilter]);
+  
+  // טעינת נתונים בטעינה ראשונית
   useEffect(() => {
-    if (!groupsLoading) {
+    if (!isMountedRef.current && !groupsLoading) {
+      console.log('OpenGamesScreen: מתחיל טעינה ראשונית של המסך');
+      isMountedRef.current = true;
+      checkAndLoadData();
+    }
+  }, [groupsLoading, checkAndLoadData]);
+  
+  // טעינת הנתונים כאשר משתנים הפילטרים
+  useEffect(() => {
+    if (isMountedRef.current && dataLoadedRef.current) {
+      console.log('OpenGamesScreen: הפילטרים השתנו, טוען נתונים מחדש');
       loadData();
     }
-  }, [timeFilter, groupFilter, refreshKey, groupsLoading]);
+  }, [timeFilter, groupFilter]);
   
-  // פונקציית רענון
-  const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
+  // טעינת נתונים בכל פעם שהמסך מקבל פוקוס (חוזרים למסך)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('OpenGamesScreen: המסך קיבל פוקוס, בודק אם יש נתונים');
+      
+      // אם כבר יש נתונים, לא צריך לטעון מחדש
+      if (dataLoadedRef.current) {
+        console.log('OpenGamesScreen: הנתונים כבר נטענו, אין צורך בטעינה מחדש');
+      } else {
+        console.log('OpenGamesScreen: אין נתונים, מבצע טעינה ראשונית במעבר למסך');
+        checkAndLoadData();
+      }
+      
+      return () => {
+        // נקיון בעת יציאה מהמסך (אופציונלי)
+        console.log('OpenGamesScreen: יציאה מהמסך');
+      };
+    }, [checkAndLoadData])
+  );
+  
+  // פונקציית רענון ידני ומפורש עבור המשתמש
+  const handleRefresh = async () => {
+    // סימון שאנחנו במצב רענון
+    console.log('OpenGamesScreen: משתמש ביקש רענון ידני');
+    setRefreshing(true);
+    
+    // טעינה מחדש של הנתונים עם רענון מאולץ
+    await loadData(true);
   };
   
   // חזרה למסך הסטטיסטיקה הראשי
@@ -127,16 +202,14 @@ export default function OpenGamesScreen() {
     router.back();
   };
   
-  // כאשר משתנה הסינון, גם משתנה מפתח הרענון
+  // כאשר משתנה הסינון
   const handleTimeFilterChange = (value: string) => {
     setTimeFilter(value);
-    setRefreshKey(prev => prev + 1); // מגדיל את מפתח הרענון בכל פעם
   };
   
-  // כאשר משתנה בחירת הקבוצה, גם משתנה מפתח הרענון
+  // כאשר משתנה בחירת הקבוצה
   const handleGroupFilterChange = (value: string) => {
     setGroupFilter(value);
-    setRefreshKey(prev => prev + 1);
   };
   
   // Format currency
@@ -159,6 +232,11 @@ export default function OpenGamesScreen() {
         backgroundColor={CASINO_COLORS.primary}
         textColor={CASINO_COLORS.gold}
         borderColor={CASINO_COLORS.gold}
+        leftElement={
+          <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+            <Icon name="refresh" size={24} color={CASINO_COLORS.gold} />
+          </TouchableOpacity>
+        }
       />
       
       {/* Filters */}
@@ -188,198 +266,226 @@ export default function OpenGamesScreen() {
         </View>
       </View>
       
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={CASINO_COLORS.gold} />
-          <Text style={styles.loadingText}>טוען סטטיסטיקות...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Icon name="trash-can" size="large" color={CASINO_COLORS.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : !stats ? (
-        <View style={styles.errorContainer}>
-          <Icon name="refresh" size="large" color={CASINO_COLORS.warning} />
-          <Text style={styles.noDataText}>אין נתונים למשחקים פתוחים בתקופה זו</Text>
-        </View>
-      ) : (
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Summary Stats */}
-          <View style={styles.statCardsContainer}>
-            {/* 1. מספר משחקים */}
-            <StatCard
-              title=""
-              value={gamesCount}
-              inlineSubtitle="משחקים"
-              icon="cards"
-              format="integer"
-              size="medium"
-              style={[styles.statCard, styles.compactCard]}
-              iconPosition="right"
-              alignRight={true}
-            />
-            
-            {/* 2. מספר משחקים פתוחים */}
-            <StatCard
-              title=""
-              value={stats.totalOpenGames || 0}
-              inlineSubtitle="משחקים פתוחים"
-              icon="cards-playing-outline"
-              format="integer"
-              size="medium"
-              style={[styles.statCard, styles.compactCard]}
-              iconPosition="right"
-              alignRight={true}
-            />
-            
-            {/* 3. ממוצע משחקים פתוחים למשחק */}
-            <StatCard
-              title=""
-              value={stats.averageOpenGamesPerGame || 0}
-              inlineSubtitle="ממוצע למשחק"
-              icon="calculator"
-              format="integer"
-              size="medium"
-              style={[styles.statCard, styles.compactCard]}
-              iconPosition="right"
-              alignRight={true}
-            />
-            
-            {/* 4. מספר זוכים במשחקים */}
-            <StatCard
-              title=""
-              value={(stats.topWinners && stats.topWinners.length) || 0}
-              inlineSubtitle="זוכים"
-              icon="account-group"
-              format="integer"
-              size="medium"
-              style={[styles.statCard, styles.compactCard]}
-              iconPosition="right"
-              alignRight={true}
-            />
-            
-            {/* 5. הזוכה בהכי הרבה משחקים פתוחים */}
+      {/* תוכן המסך עם תמיכה ברענון משיכה */}
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[CASINO_COLORS.primary]}
+            tintColor={CASINO_COLORS.primary}
+          />
+        }
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={CASINO_COLORS.gold} />
+            <Text style={styles.loadingText}>טוען סטטיסטיקות...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Icon name="alert-circle" size="large" color={CASINO_COLORS.error} />
+            <Text style={styles.errorText}>{error}</Text>
             <TouchableOpacity 
-              style={[styles.statCard, styles.compactCard]}
-              onPress={(stats.topWinners && stats.topWinners.length > 0 && stats.topWinners[0].playerId) ? 
-                () => router.push(`/statistics/playerStats?playerId=${stats.topWinners[0].playerId}`) : undefined}
-              activeOpacity={0.7}
+              style={styles.refreshButton} 
+              onPress={handleRefresh}
             >
-              {/* שורה עליונה: אייקון מימין, מספר זכיות משמאל */}
-              <View style={styles.winnerRow}>
-                <Icon name="crown" size="medium" color={CASINO_COLORS.gold} />
-                <Text style={styles.winnerAmount}>
-                  {(stats.topWinners && stats.topWinners.length > 0) ? 
-                    `${stats.topWinners[0].winCount} זכיות` : ''}
-                </Text>
-              </View>
-              
-              {/* שורה תחתונה: שם השחקן */}
-              <Text style={styles.winnerName}>
-                {(stats.topWinners && stats.topWinners.length > 0) ? 
-                  stats.topWinners[0].playerName : 'אין נתונים'}
-              </Text>
-            </TouchableOpacity>
-            
-            {/* 6. הזוכה בהכי הרבה כסף במשחקים פתוחים */}
-            <TouchableOpacity 
-              style={[styles.statCard, styles.compactCard]}
-              onPress={(stats.topWinners && stats.topWinners.length > 0) ? 
-                () => {
-                  const topMoneyWinner = [...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0];
-                  router.push(`/statistics/playerStats?playerId=${topMoneyWinner.playerId}`);
-                } : undefined}
-              activeOpacity={0.7}
-            >
-              {/* שורה עליונה: אייקון מימין, סכום כסף משמאל */}
-              <View style={styles.winnerRow}>
-                <Icon name="cash" size="medium" color={CASINO_COLORS.gold} />
-                <Text style={styles.winnerAmount}>
-                  {(stats.topWinners && stats.topWinners.length > 0) ? 
-                    formatCurrency([...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0].totalWon) : ''}
-                </Text>
-              </View>
-              
-              {/* שורה תחתונה: שם השחקן */}
-              <Text style={styles.winnerName}>
-                {(stats.topWinners && stats.topWinners.length > 0) ? 
-                  [...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0].playerName : 'אין נתונים'}
-              </Text>
+              <Icon name="refresh" size="medium" color={CASINO_COLORS.gold} />
+              <Text style={styles.refreshButtonText}>נסה שוב</Text>
             </TouchableOpacity>
           </View>
-          
-          {/* Top Winners Chart & List - Combined with Toggle */}
-          {stats.topWinners && stats.topWinners.length > 0 && (
-            <Card style={styles.card}>
-              <View style={styles.titleContainer}>
-                <View style={styles.titleWithIcon}>
-                  <Icon 
-                    name="crown" 
-                    size="medium" 
-                    color={CASINO_COLORS.gold} 
-                    style={styles.titleIcon} 
-                  />
-                  <Text style={styles.cardTitle}>מנצחים במשחקים פתוחים</Text>
-                </View>
-              </View>
-              
-              {/* Toggle Buttons for Sorting */}
-              <View style={styles.toggleContainer}>
-                <TouchableOpacity 
-                  style={[styles.toggleButton, sortBy === 'wins' && styles.toggleButtonActive]} 
-                  onPress={() => setSortBy('wins')}
-                >
-                  <Text style={[styles.toggleText, sortBy === 'wins' && styles.toggleTextActive]}>
-                    לפי מספר זכיות
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.toggleButton, sortBy === 'money' && styles.toggleButtonActive]} 
-                  onPress={() => setSortBy('money')}
-                >
-                  <Text style={[styles.toggleText, sortBy === 'money' && styles.toggleTextActive]}>
-                    לפי סכום זכיות
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              {/* Combined List */}
-              <StatisticsList
-                title={sortBy === 'wins' ? "מנצחים - לפי מספר זכיות" : "מנצחים - לפי סכום זכיות"}
-                items={
-                  sortBy === 'wins'
-                    ? stats.topWinners.map((winner, index) => ({
-                        id: winner.playerId,
-                        title: winner.playerName,
-                        value: `${winner.winCount} זכיות`,
-                        subtitle: `${formatCurrency(winner.totalWon)}`,
-                        icon: index < 3 ? 'trophy' : undefined,
-                        valueColor: CASINO_COLORS.gold
-                      }))
-                    : [...stats.topWinners]
-                        .sort((a, b) => b.totalWon - a.totalWon)
-                        .map((winner, index) => ({
-                          id: `${winner.playerId}-money`,
-                          title: winner.playerName,
-                          value: formatCurrency(winner.totalWon),
-                          subtitle: `${winner.winCount} זכיות`,
-                          valueColor: CASINO_COLORS.success
-                        }))
-                }
-                showRank={true}
+        ) : !stats ? (
+          <View style={styles.errorContainer}>
+            <Icon name="magnify" size="large" color={CASINO_COLORS.warning} />
+            <Text style={styles.noDataText}>אין נתונים למשחקים פתוחים בתקופה זו</Text>
+            <Text style={styles.noDataSubText}>ייתכן שטרם נטענו הנתונים או שהם השתנו לאחרונה</Text>
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={handleRefresh}
+            >
+              <Icon name="refresh" size="medium" color={CASINO_COLORS.gold} />
+              <Text style={styles.refreshButtonText}>רענן נתונים</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Summary Stats */}
+            <View style={styles.statCardsContainer}>
+              {/* 1. מספר משחקים */}
+              <StatCard
+                title=""
+                value={gamesCount}
+                inlineSubtitle="משחקים"
+                icon="cards"
+                format="integer"
+                size="medium"
+                style={[styles.statCard, styles.compactCard]}
+                iconPosition="right"
                 alignRight={true}
-                rankPrefix=""
-                onItemPress={(item) => router.push(`/statistics/playerStats?playerId=${item.id.split('-')[0]}`)}
               />
-            </Card>
-          )}
-        </ScrollView>
-      )}
+              
+              {/* 2. מספר משחקים פתוחים */}
+              <StatCard
+                title=""
+                value={stats.totalOpenGames || 0}
+                inlineSubtitle="משחקים פתוחים"
+                icon="cards-playing-outline"
+                format="integer"
+                size="medium"
+                style={[styles.statCard, styles.compactCard]}
+                iconPosition="right"
+                alignRight={true}
+              />
+              
+              {/* 3. ממוצע משחקים פתוחים למשחק */}
+              <StatCard
+                title=""
+                value={stats.averageOpenGamesPerGame || 0}
+                inlineSubtitle="ממוצע למשחק"
+                icon="calculator"
+                format="integer"
+                size="medium"
+                style={[styles.statCard, styles.compactCard]}
+                iconPosition="right"
+                alignRight={true}
+              />
+              
+              {/* 4. מספר זוכים במשחקים */}
+              <StatCard
+                title=""
+                value={(stats.topWinners && stats.topWinners.length) || 0}
+                inlineSubtitle="זוכים"
+                icon="account-group"
+                format="integer"
+                size="medium"
+                style={[styles.statCard, styles.compactCard]}
+                iconPosition="right"
+                alignRight={true}
+              />
+              
+              {/* 5. הזוכה בהכי הרבה משחקים פתוחים */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.compactCard]}
+                onPress={(stats.topWinners && stats.topWinners.length > 0 && stats.topWinners[0].playerId) ? 
+                  () => router.push(`/statistics/playerStats?playerId=${stats.topWinners[0].playerId}`) : undefined}
+                activeOpacity={0.7}
+              >
+                {/* שורה עליונה: אייקון מימין, מספר זכיות משמאל */}
+                <View style={styles.winnerRow}>
+                  <Icon name="crown" size="medium" color={CASINO_COLORS.gold} />
+                  <Text style={styles.winnerAmount}>
+                    {(stats.topWinners && stats.topWinners.length > 0) ? 
+                      `${stats.topWinners[0].winCount} זכיות` : ''}
+                  </Text>
+                </View>
+                
+                {/* שורה תחתונה: שם השחקן */}
+                <Text style={styles.winnerName}>
+                  {(stats.topWinners && stats.topWinners.length > 0) ? 
+                    stats.topWinners[0].playerName : 'אין נתונים'}
+                </Text>
+              </TouchableOpacity>
+              
+              {/* 6. הזוכה בהכי הרבה כסף במשחקים פתוחים */}
+              <TouchableOpacity 
+                style={[styles.statCard, styles.compactCard]}
+                onPress={(stats.topWinners && stats.topWinners.length > 0) ? 
+                  () => {
+                    const topMoneyWinner = [...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0];
+                    router.push(`/statistics/playerStats?playerId=${topMoneyWinner.playerId}`);
+                  } : undefined}
+                activeOpacity={0.7}
+              >
+                {/* שורה עליונה: אייקון מימין, סכום כסף משמאל */}
+                <View style={styles.winnerRow}>
+                  <Icon name="cash" size="medium" color={CASINO_COLORS.gold} />
+                  <Text style={styles.winnerAmount}>
+                    {(stats.topWinners && stats.topWinners.length > 0) ? 
+                      formatCurrency([...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0].totalWon) : ''}
+                  </Text>
+                </View>
+                
+                {/* שורה תחתונה: שם השחקן */}
+                <Text style={styles.winnerName}>
+                  {(stats.topWinners && stats.topWinners.length > 0) ? 
+                    [...stats.topWinners].sort((a, b) => b.totalWon - a.totalWon)[0].playerName : 'אין נתונים'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Top Winners Chart & List - Combined with Toggle */}
+            {stats.topWinners && stats.topWinners.length > 0 && (
+              <Card style={styles.card}>
+                <View style={styles.titleContainer}>
+                  <View style={styles.titleWithIcon}>
+                    <Icon 
+                      name="crown" 
+                      size="medium" 
+                      color={CASINO_COLORS.gold} 
+                      style={styles.titleIcon} 
+                    />
+                    <Text style={styles.cardTitle}>מנצחים במשחקים פתוחים</Text>
+                  </View>
+                </View>
+                
+                {/* Toggle Buttons for Sorting */}
+                <View style={styles.toggleContainer}>
+                  <TouchableOpacity 
+                    style={[styles.toggleButton, sortBy === 'wins' && styles.toggleButtonActive]} 
+                    onPress={() => setSortBy('wins')}
+                  >
+                    <Text style={[styles.toggleText, sortBy === 'wins' && styles.toggleTextActive]}>
+                      לפי מספר זכיות
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.toggleButton, sortBy === 'money' && styles.toggleButtonActive]} 
+                    onPress={() => setSortBy('money')}
+                  >
+                    <Text style={[styles.toggleText, sortBy === 'money' && styles.toggleTextActive]}>
+                      לפי סכום זכיות
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {/* Combined List */}
+                <StatisticsList
+                  title={sortBy === 'wins' ? "מנצחים - לפי מספר זכיות" : "מנצחים - לפי סכום זכיות"}
+                  items={
+                    sortBy === 'wins'
+                      ? stats.topWinners.map((winner, index) => ({
+                          id: winner.playerId,
+                          title: winner.playerName,
+                          value: `${winner.winCount} זכיות`,
+                          subtitle: `${formatCurrency(winner.totalWon)}`,
+                          icon: index < 3 ? 'trophy' : undefined,
+                          valueColor: CASINO_COLORS.gold
+                        }))
+                      : [...stats.topWinners]
+                          .sort((a, b) => b.totalWon - a.totalWon)
+                          .map((winner, index) => ({
+                            id: `${winner.playerId}-money`,
+                            title: winner.playerName,
+                            value: formatCurrency(winner.totalWon),
+                            subtitle: `${winner.winCount} זכיות`,
+                            valueColor: CASINO_COLORS.success
+                          }))
+                  }
+                  showRank={true}
+                  alignRight={true}
+                  rankPrefix=""
+                  onItemPress={(item) => router.push(`/statistics/playerStats?playerId=${item.id.split('-')[0]}`)}
+                />
+              </Card>
+            )}
+          </ScrollView>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -464,6 +570,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 16,
+  },
+  noDataSubText: {
+    color: CASINO_COLORS.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -596,5 +709,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    color: CASINO_COLORS.gold,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 8,
   },
 });

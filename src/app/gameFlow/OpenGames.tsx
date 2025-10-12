@@ -1,10 +1,13 @@
 // src/app/gameFlow/OpenGames.tsx
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, BackHandler } from 'react-native';
 import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Dropdown } from '@/components/common/Dropdown';
+import { Icon } from '@/components/common/Icon';
+import { Dialog } from '@/components/common/Dialog';
+import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
 import { useRouter } from 'expo-router';
 import { useGameContext } from '@/contexts/GameContext';
 
@@ -15,10 +18,14 @@ interface OpenGameState {
 
 export default function OpenGames() {
   const router = useRouter();
-  const { gameData, setGameData, updateGameStatus } = useGameContext();
+  const { gameData, setGameData, updateGameStatus, shouldUpdateStatus, canUserContinueThisGame } = useGameContext();
   
   // State for tracking open games
   const [openGames, setOpenGames] = useState<OpenGameState[]>([]);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  
+  // בדיקת הרשאות להמשך המשחק
+  const canContinue = canUserContinueThisGame(gameData);
   
   // Initialize open games array based on required count
   useEffect(() => {
@@ -66,10 +73,26 @@ export default function OpenGames() {
       }))
     }));
     
-    // Navigate to payment calculations
-    updateGameStatus('payments');
+    // Navigate to final results (not payment calculations yet)
+    updateGameStatus('final_results');
     router.push('/gameFlow/FinalResults');
   };
+
+  // הסרת עדכון אוטומטי של סטטוס - נעשה באופן ידני במקומות המתאימים
+
+  // Handle hardware back press
+  useEffect(() => {
+    const backAction = () => {
+      setShowExitDialog(true);
+      return true; // Prevent default behavior (exiting the app)
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+    return () => backHandler.remove();
+  }, []);
 
   // Calculate remaining games
   const completedGamesCount = openGames.filter(game => game.winner).length;
@@ -79,6 +102,13 @@ export default function OpenGames() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Back Button */}
+        <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.backButton}>
+           <Icon name="arrow-right" size={24} color="#FFD700" />
+        </TouchableOpacity>
+        
+        {/* Header Content */} 
+        <View style={styles.headerContent}> 
         <Text variant="h4" style={styles.headerTitle}>
           משחקים פתוחים
         </Text>
@@ -91,7 +121,19 @@ export default function OpenGames() {
         <Text style={styles.headerInfo}>
           כל משחק שווה {gameData.rebuySnapshot.amount} ₪
         </Text>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={() => {
+            router.push('/(tabs)/home2');
+          }} 
+          style={styles.homeButton}
+        >
+          <Icon name="home" size={24} color="#FFD700" />
+        </TouchableOpacity>
       </View>
+
+      <ReadOnlyIndicator />
 
       {/* Summary Section - Always shown, dynamically updated */}
       <Card style={styles.summaryCard}>
@@ -150,7 +192,8 @@ export default function OpenGames() {
                   { label: 'בחר זוכה', value: '' },
                   ...playerItems
                 ]}
-                onSelect={(value) => selectWinner(game.id, value)}
+                onSelect={canContinue ? (value) => selectWinner(game.id, value) : () => {}}
+                disabled={!canContinue}
               />
             </View>
 
@@ -167,17 +210,33 @@ export default function OpenGames() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
-        <Button
-          title="המשך לחישוב תשלומים"
-          onPress={handleComplete}
-          disabled={!allGamesCompleted}
-          style={[
-            styles.continueButton,
-            !allGamesCompleted && styles.disabledButton
-          ]}
-        />
-      </View>
+      {canContinue && (
+        <View style={styles.footer}>
+          <Button
+            title="המשך לתוצאות הסופיות"
+            onPress={handleComplete}
+            disabled={!allGamesCompleted}
+            style={[
+              styles.continueButton,
+              !allGamesCompleted && styles.disabledButton
+            ]}
+          />
+        </View>
+      )}
+
+      {/* Exit Confirmation Dialog */}
+      <Dialog
+        visible={showExitDialog}
+        title="חזרה למסך הקודם"
+        message="האם אתה בטוח שברצונך לחזור למסך הקודם? הנתונים שהוזנו עבור המשחקים הפתוחים לא יישמרו."
+        onCancel={() => setShowExitDialog(false)}
+        onConfirm={() => {
+          setShowExitDialog(false);
+          router.back(); // פשוט חזרה למסך הקודם במחסנית הניווט
+        }}
+        confirmText="כן, חזור"
+        cancelText="לא, המשך כאן"
+      />
     </View>
   );
 }
@@ -188,10 +247,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
     borderBottomWidth: 2,
     borderBottomColor: '#FFD700',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
     color: '#FFD700',
@@ -259,7 +333,7 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 16,
-    paddingBottom: 24, // Add extra padding at the bottom to prevent overlap
+    paddingBottom: 24,
   },
   gameCard: {
     marginBottom: 16,
@@ -327,7 +401,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
     borderTopWidth: 1,
     borderTopColor: '#FFD700',
-    marginTop: 8, // Add margin to create space between content and footer
+    marginTop: 8,
   },
   continueButton: {
     backgroundColor: '#35654d',
@@ -336,5 +410,14 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
-  }
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
 });

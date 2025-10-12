@@ -11,7 +11,8 @@ import {
   Keyboard,
   KeyboardEvent,
   StyleSheet,
-  FlatList
+  FlatList,
+  Alert
 } from 'react-native';
 import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
@@ -19,12 +20,18 @@ import { Icon } from '@/components/common/Icon';
 import { Dialog } from '@/components/common/Dialog';
 import { useRouter } from 'expo-router';
 import { useGameContext, GameData, Player } from '@/contexts/GameContext';
-import { calculateInitialGameSummary } from '@/utils/gameCalculations';
+import { calculateInitialGameSummary } from '@/calculations/legacy';
 import AddExternalPlayerDialog from '@/components/dashboard/AddExternalPlayerDialog';
 import { getActiveUsers, getAllUsers } from '@/services/users';
 import { getGroupPlayers } from '@/services/groups';
 import { createNewPlayerAndAddToGroup } from '@/services/playerManagement/playerManagement';
 import { Modal as RNModal } from 'react-native';
+import { SaveIndicator } from '@/components/common/SaveIndicator';
+import { PlayerInGame } from '@/models/Game';
+import { useAuth } from '@/contexts/AuthContext';
+import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
+import { useReadOnlyMode } from '@/components/auth/ProtectedRoute';
+import { useCan } from '@/hooks/useCan';
 
 // Types
 interface RebuyLog {
@@ -49,11 +56,12 @@ const PlayerCard: React.FC<{
   onFinalChipsChange: (value: string) => void;
   buyInAmount: number;
   rebuyAmount: number;
-}> = ({ player, onIncrement, onDecrement, onFinalChipsChange, buyInAmount, rebuyAmount }) => {
+  canEdit: boolean;
+}> = ({ player, onIncrement, onDecrement, onFinalChipsChange, buyInAmount, rebuyAmount, canEdit }) => {
   const totalInvestment = (player.buyInCount * buyInAmount) + (player.rebuyCount * rebuyAmount);
   
   return (
-    <View style={[styles.playerCard, player.isHighlighted && styles.highlightCard]}>
+    <View style={styles.playerCard}>
       <View style={styles.topRow}>
         <View style={styles.financialColumn}>
           <Text style={styles.financialText}>Buy-In: {player.buyInCount * buyInAmount} ₪</Text>
@@ -68,26 +76,31 @@ const PlayerCard: React.FC<{
       <View style={styles.rebuyRow}>
         <TouchableOpacity
           onPress={onDecrement}
-          disabled={player.rebuyCount === 0}
-          style={[styles.actionBtn, player.rebuyCount === 0 && styles.disabledButton]}
+          disabled={!canEdit || player.rebuyCount === 0}
+          style={[styles.actionBtn, (!canEdit || player.rebuyCount === 0) && styles.disabledButton]}
         >
-          <Icon name="minus" size="medium" color="#FFD700" />
+          <Icon name="minus" size="medium" color={canEdit ? "#FFD700" : "#666"} />
         </TouchableOpacity>
         <Text style={styles.rebuyCount}>{player.rebuyCount}</Text>
-        <TouchableOpacity onPress={onIncrement} style={styles.actionBtn}>
-          <Icon name="plus" size="medium" color="#FFD700" />
+        <TouchableOpacity 
+          onPress={onIncrement} 
+          disabled={!canEdit}
+          style={[styles.actionBtn, !canEdit && styles.disabledButton]}
+        >
+          <Icon name="plus" size="medium" color={canEdit ? "#FFD700" : "#666"} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.finalChipsFull}>
         <Text style={styles.finalLabel}>Final Chips:</Text>
         <TextInput
-          style={styles.finalChipsInputFull}
+          style={[styles.finalChipsInputFull, !canEdit && styles.disabledInput]}
           placeholder="0"
           keyboardType="numeric"
           value={player.finalChips}
           onChangeText={onFinalChipsChange}
           maxLength={8}
+          editable={canEdit}
         />
       </View>
     </View>
@@ -97,7 +110,19 @@ const PlayerCard: React.FC<{
 // Main Component
 export default function GameManagement() {
   const router = useRouter();
-  const { gameData, setGameData } = useGameContext();
+  const { user, canAddPlayerToGame } = useAuth();
+  const { isReadOnlyMode } = useReadOnlyMode();
+  const { manageGame } = useCan();
+  const { 
+    gameData, 
+    setGameData, 
+    saveActiveGame, 
+    updateGameStatus, 
+    saveStatus, 
+    isNetworkConnected,
+    clearActiveGame,
+    canUserContinueThisGame
+  } = useGameContext();
 
   const players = gameData.players || [];
   const rebuyLogs = gameData.rebuyLogs || [];
@@ -105,6 +130,9 @@ export default function GameManagement() {
   const groupName = gameData.groupNameSnapshot || '';
   const buyInAmount = gameData.buyInSnapshot?.amount || 0;
   const rebuyAmount = gameData.rebuySnapshot?.amount || 0;
+  
+  // בדיקת הרשאות עריכה
+  const canEdit = canUserContinueThisGame(gameData) && manageGame(gameData);
 
   // Dialog States
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -117,8 +145,9 @@ export default function GameManagement() {
   const [availablePlayers, setAvailablePlayers] = useState<AvailablePlayer[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [showNewPlayerDialog, setShowNewPlayerDialog] = useState(false);
-  const [newPlayerData, setNewPlayerData] = useState({ name: '', phone: '' });
+  const [newPlayerData, setNewPlayerData] = useState({ name: '', phone: '', email: '' });
   const [newPlayerError, setNewPlayerError] = useState<string | null>(null);
+  const [newPlayerEmailError, setNewPlayerEmailError] = useState<string | null>(null);
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
 
   // Keyboard Event Handlers
@@ -225,8 +254,16 @@ export default function GameManagement() {
 
   const handleNewPlayer = async () => {
     try {
+      setNewPlayerError(null);
+      setNewPlayerEmailError(null);
+
       if (!newPlayerData.name.trim()) {
         setNewPlayerError('יש להזין שם שחקן');
+        return;
+      }
+
+      if (newPlayerData.email.trim() && !/\\S+@\\S+\\.\\S+/.test(newPlayerData.email.trim())) {
+        setNewPlayerEmailError('כתובת אימייל אינה תקינה');
         return;
       }
 
@@ -236,7 +273,11 @@ export default function GameManagement() {
       }
 
       const newUserId = await createNewPlayerAndAddToGroup(
-        newPlayerData, 
+        {
+          name: newPlayerData.name.trim(),
+          phone: newPlayerData.phone.trim(),
+          email: newPlayerData.email.trim() ? newPlayerData.email.trim() : undefined
+        }, 
         gameData.groupId
       );
       
@@ -253,12 +294,35 @@ export default function GameManagement() {
         players: [...prev.players, newPlayer]
       }));
 
-      setNewPlayerData({ name: '', phone: '' });
+      // Check if email was provided to show appropriate message
+      if (newPlayerData.email.trim()) {
+        setNewPlayerError('✅ השחקן נוצר בהצלחה עם אימייל! המערכת תתנתק אוטומטית כדי לשמור על אבטחת המערכת. תוכל להתחבר מחדש כאדמין תוך כמה שניות.');
+        
+        // Close dialog after showing success message
+        setTimeout(() => {
+          setNewPlayerData({ name: '', phone: '', email: '' });
       setNewPlayerError(null);
+          setNewPlayerEmailError(null);
       setShowNewPlayerDialog(false);
       setShowAddPlayerDialog(false);
+        }, 3000);
+      } else {
+        // Regular success for player without email
+        setNewPlayerData({ name: '', phone: '', email: '' });
+        setNewPlayerError(null);
+        setNewPlayerEmailError(null);
+        setShowNewPlayerDialog(false);
+        setShowAddPlayerDialog(false);
+      }
     } catch (error: any) {
+      if (error.message && error.message.toLowerCase().includes('אימייל')) {
+        setNewPlayerEmailError(error.message);
+      } else if (error.message && error.message.toLowerCase().includes('שם')) {
+        setNewPlayerError(error.message);
+      }
+      else {
       setNewPlayerError(error.message || 'שגיאה ביצירת שחקן חדש');
+      }
     }
   };
 
@@ -279,6 +343,15 @@ export default function GameManagement() {
   };
 
   const updateRebuy = (playerId: string, delta: number) => {
+    if (!canEdit) {
+      Alert.alert(
+        "אין הרשאה",
+        "אין לך הרשאה לערוך את המשחק הזה.",
+        [{ text: "הבנתי" }]
+      );
+      return;
+    }
+    
     setGameData((prev: GameData): GameData => ({
       ...prev,
       players: prev.players.map((p) => {
@@ -308,15 +381,27 @@ export default function GameManagement() {
   };
 
   const updateFinalChips = (playerId: string, value: string) => {
-    // Only allow numbers
-    if (value && !/^\d+$/.test(value)) {
+    if (!canEdit) {
+      Alert.alert(
+        "אין הרשאה",
+        "אין לך הרשאה לערוך את המשחק הזה.",
+        [{ text: "הבנתי" }]
+      );
       return;
     }
+    
+    // Clean the input: remove all non-digit characters and trim whitespace
+    const cleanValue = value.trim().replace(/\D/g, '');
+    
+    // If original value had non-digits and we cleaned it, use the cleaned version
+    const finalValue = cleanValue;
+    
+    console.log(`updateFinalChips: playerId=${playerId}, originalValue="${value}", cleanValue="${cleanValue}"`);
     
     setGameData((prev: GameData): GameData => ({
       ...prev,
       players: prev.players.map(p => 
-        p.id === playerId ? { ...p, finalChips: value } : p
+        p.id === playerId ? { ...p, finalChips: finalValue } : p
       )
     }));
   };
@@ -326,9 +411,20 @@ export default function GameManagement() {
   );
 
   const finishGame = async () => {
+    if (!canEdit) {
+      Alert.alert(
+        "אין הרשאה",
+        "אין לך הרשאה לסיים את המשחק הזה.",
+        [{ text: "הבנתי" }]
+      );
+      return;
+    }
+    
     if (!allFinalChipsEntered) return;
 
     try {
+      console.log('GameManagement: Starting finish game process');
+      
       const summary = calculateInitialGameSummary(
         players,
         gameData.buyInSnapshot,
@@ -340,23 +436,36 @@ export default function GameManagement() {
       const needsOpenGames = gameData.useRoundingRule && 
                            summary.openGamesCount > 0;
 
-      setGameData((prev: GameData): GameData => ({
-        ...prev,
+      const newStatus = needsOpenGames ? 'ended' : 'final_results';
+
+      // עדכון הנתונים בצורה אטומית - ללא קריאות נפרדות
+      const updatedGameData: GameData = {
+        ...gameData,
         players: summary.playersResults,
         totalWins: summary.totalWins,
         totalLosses: summary.totalLosses,
         difference: summary.difference,
         openGamesCount: summary.openGamesCount,
-        status: needsOpenGames ? 'ended' : 'final_results'
-      }));
+        status: newStatus
+      };
 
+      setGameData(updatedGameData);
+
+      console.log(`GameManagement: Game status updated to ${newStatus}, navigating to next screen`);
+
+      // ניווט ללא עדכון סטטוס נפרד - כי כבר עדכנו ב-setGameData
       if (needsOpenGames) {
         router.push('/gameFlow/InitialResults');
       } else {
         router.push('/gameFlow/FinalResults');
       }
     } catch (error) {
-      console.error('Error finishing game:', error);
+      console.error('GameManagement: Error finishing game:', error);
+      Alert.alert(
+        "שגיאה",
+        "אירעה שגיאה בסיום המשחק. נסה שוב.",
+        [{ text: "הבנתי" }]
+      );
     }
   };
 
@@ -375,31 +484,57 @@ export default function GameManagement() {
           <Icon name="arrow-right" size="medium" color="#FFD700" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text variant="h4" style={styles.groupName}>{groupName}</Text>
-          <Text style={styles.headerSubText}>
-            תאריך: {formatGameDate(gameDate)}
-          </Text>
-          <Text style={styles.headerSubText}>
-            סה"כ: {players.reduce((sum, p) => 
-              sum + (p.buyInCount * buyInAmount) + (p.rebuyCount * rebuyAmount), 0)} ₪
-          </Text>
+          <Text style={styles.headerSubText}>ניהול משחק</Text>
+          <Text style={styles.groupName}>{groupName}</Text>
+          <Text style={styles.headerSubText}>{formatGameDate(gameDate)}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={styles.homeButtonContainer}>
+          <TouchableOpacity
+            style={styles.homeButton}
+            onPress={() => router.push('/(tabs)/home2')}
+          >
+            <Icon name="home" size="medium" color="#FFD700" />
+          </TouchableOpacity>
+          <View style={styles.saveIndicatorContainer}>
+            <SaveIndicator status={saveStatus} />
+            {!isNetworkConnected && (
+              <Icon name="wifi-off" size="small" color="#FFD700" />
+            )}
+          </View>
+        </View>
       </View>
+
+      <ReadOnlyIndicator />
 
       {/* Action Buttons Bar */}
       <View style={styles.actionButtonsBar}>
-        <Button
-          title="הוסף שחקן"
-          icon="account-plus"
-          onPress={() => {
-            loadAvailablePlayers();
-            setShowAddPlayerDialog(true);
-          }}
-          style={styles.actionButton}
-          textStyle={styles.actionButtonText}
-          disabled={players.length >= 13}
-        />
+        {canAddPlayerToGame(gameData) ? (
+          <Button
+            title="הוסף שחקן"
+            icon="account-plus"
+            onPress={() => {
+              loadAvailablePlayers();
+              setShowAddPlayerDialog(true);
+            }}
+            style={styles.actionButton}
+            textStyle={styles.actionButtonText}
+            disabled={players.length >= 13}
+          />
+        ) : (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.disabledButton]}
+            onPress={() => {
+              Alert.alert(
+                "אין הרשאה",
+                "רק מנהל מערכת או יוצר המשחק יכולים להוסיף שחקנים.",
+                [{ text: "הבנתי" }]
+              );
+            }}
+          >
+            <Icon name="account-plus" size="medium" color="#666" />
+            <Text style={[styles.actionButtonText, { color: '#666' }]}>הוסף שחקן</Text>
+          </TouchableOpacity>
+        )}
         <Button
           title="לוג ריבאיים"
           icon="clipboard-list"
@@ -428,6 +563,7 @@ export default function GameManagement() {
               onFinalChipsChange={(value) => updateFinalChips(player.id, value)}
               buyInAmount={buyInAmount}
               rebuyAmount={rebuyAmount}
+              canEdit={canEdit}
             />
           ))}
         </ScrollView>
@@ -438,20 +574,37 @@ export default function GameManagement() {
           keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
           <View style={styles.fixedButtonContainer}>
-            <TouchableOpacity
-              onPress={finishGame}
-              disabled={!allFinalChipsEntered}
-              style={[
-                styles.startButton,
-                { backgroundColor: allFinalChipsEntered ? '#00008B' : '#555' }
-              ]}
-            >
-              <Text variant="bodyLarge" style={styles.startButtonText}>
-                {allFinalChipsEntered
-                  ? "סיים משחק"
-                  : "לסיום המשחק הזן כמות צ'יפים סופית לכל השחקנים"}
-              </Text>
-            </TouchableOpacity>
+            {canEdit ? (
+              <TouchableOpacity
+                onPress={finishGame}
+                disabled={!allFinalChipsEntered}
+                style={[
+                  styles.startButton,
+                  { backgroundColor: allFinalChipsEntered ? '#00008B' : '#555' }
+                ]}
+              >
+                <Text variant="bodyLarge" style={styles.startButtonText}>
+                  {allFinalChipsEntered
+                    ? "סיים משחק"
+                    : "לסיום המשחק הזן כמות צ'יפים סופית לכל השחקנים"}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.startButton, { backgroundColor: '#666' }]}
+                onPress={() => {
+                  Alert.alert(
+                    "אין הרשאה",
+                    "אין לך הרשאה לסיים את המשחק הזה.",
+                    [{ text: "הבנתי" }]
+                  );
+                }}
+              >
+                <Text variant="bodyLarge" style={[styles.startButtonText, { color: '#AAA' }]}>
+                  אין הרשאה לסיים משחק
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -562,11 +715,13 @@ export default function GameManagement() {
         title="יציאה מהמשחק"
         confirmText="צא"
         cancelText="המשך משחק"
-        onConfirm={() => {
+        onConfirm={async () => {
           setShowExitDialog(false);
-          router.back();
+          await clearActiveGame();
+          router.push('/(tabs)/games');
         }}
         onCancel={() => setShowExitDialog(false)}
+        message="האם אתה בטוח שברצונך לצאת? כל השינויים שלך יאבדו."
       >
         <Text style={styles.exitDialogText}>
           האם אתה בטוח שברצונך לצאת? כל השינויים שלך יאבדו.
@@ -588,8 +743,9 @@ export default function GameManagement() {
         onConfirm={handleAddPlayers}
         onAddNew={() => {
           setShowNewPlayerDialog(true);
-          setNewPlayerData({ name: '', phone: '' });
+          setNewPlayerData({ name: '', phone: '', email: '' });
           setNewPlayerError(null);
+          setNewPlayerEmailError(null);
         }}
         onCancel={() => {
           setShowAddPlayerDialog(false);
@@ -603,23 +759,22 @@ export default function GameManagement() {
         visible={showNewPlayerDialog}
         title="הוסף שחקן חדש"
         onConfirm={() => {
-        // Only execute handleNewPlayer if there's no error and name is not empty
-          if (newPlayerData.name.trim() && !newPlayerError) {
+          if (newPlayerData.name.trim() && !newPlayerError && !newPlayerEmailError) {
             handleNewPlayer();
           }
-          // When conditions fail, do nothing - this prevents both the submission and dialog closing
         }}
         confirmText="הוסף"
         cancelText="ביטול"
         onCancel={() => {
           setShowNewPlayerDialog(false);
-          setNewPlayerData({ name: '', phone: '' });
+          setNewPlayerData({ name: '', phone: '', email: '' });
           setNewPlayerError(null);
+          setNewPlayerEmailError(null);
         }}
-        // Disable the confirm button when there's an error
         confirmButtonProps={{
-          disabled: Boolean(!newPlayerData.name.trim() || newPlayerError !== null)
+          disabled: Boolean(!newPlayerData.name.trim() || newPlayerError !== null || newPlayerEmailError !== null)
         }}
+        message="הזן את פרטי השחקן החדש"
       >
         <View style={styles.newPlayerContainer}>
           <Text style={styles.inputLabel}>שם השחקן</Text>
@@ -628,16 +783,18 @@ export default function GameManagement() {
             value={newPlayerData.name}
             onChangeText={(text) => {
               setNewPlayerData(prev => ({ ...prev, name: text }));
-              getAllUsers().then(users => {
-                const exists = users.some(user =>
-                  user.name.toLowerCase() === text.trim().toLowerCase()
-                );
-                setNewPlayerError(exists ? 'שם זה כבר קיים' : null);
-              });
+              if (!text.trim()) {
+                setNewPlayerError('יש להזין שם שחקן');
+              } else {
+                setNewPlayerError(null);
+              }
             }}
             placeholder="הכנס שם שחקן"
             placeholderTextColor="#666"
           />
+          {newPlayerError && !newPlayerError.toLowerCase().includes('אימייל') && (
+            <Text style={styles.errorText}>{newPlayerError}</Text>
+          )}
           <Text style={styles.inputLabel}>טלפון (אופציונלי)</Text>
           <TextInput
             style={styles.newPlayerInput}
@@ -647,7 +804,27 @@ export default function GameManagement() {
             placeholderTextColor="#666"
             keyboardType="phone-pad"
           />
-          {newPlayerError && (
+          <Text style={styles.inputLabel}>אימייל (אופציונלי)</Text>
+          <TextInput
+            style={styles.newPlayerInput}
+            value={newPlayerData.email}
+            onChangeText={(text) => {
+              setNewPlayerData(prev => ({ ...prev, email: text }));
+              if (text.trim() && !/\\S+@\\S+\\.\\S+/.test(text.trim())) {
+                setNewPlayerEmailError('כתובת אימייל אינה תקינה');
+              } else {
+                setNewPlayerEmailError(null);
+              }
+            }}
+            placeholder="הכנס אימייל"
+            placeholderTextColor="#666"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          {newPlayerEmailError && (
+            <Text style={styles.errorText}>{newPlayerEmailError}</Text>
+          )}
+          {newPlayerError && !newPlayerError.toLowerCase().includes('שם') && !newPlayerError.toLowerCase().includes('אימייל') && (
             <Text style={styles.errorText}>{newPlayerError}</Text>
           )}
         </View>
@@ -710,7 +887,10 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#FFD700',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginLeft: 8,
   },
   mainContent: {
     flex: 1,
@@ -768,6 +948,8 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+    backgroundColor: '#444',
+    borderColor: '#666',
   },
   rebuyCount: {
     fontSize: 22,
@@ -792,6 +974,11 @@ const styles = StyleSheet.create({
     width: '100%',
     textAlign: 'right',
     backgroundColor: '#1C2C2E',
+  },
+  disabledInput: {
+    backgroundColor: '#333',
+    borderColor: '#666',
+    color: '#666',
   },
   fixedButtonContainer: {
     backgroundColor: '#0D1B1E',
@@ -874,7 +1061,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 8,
   },
-  // Additional styles for player selection
   sectionTitle: {
     color: '#FFD700',
     fontSize: 18,
@@ -887,6 +1073,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.7,
   },
+  saveIndicatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    justifyContent: 'center',
+    width: 40,
+  },
+  homeButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
 });
-
-export default GameManagement;

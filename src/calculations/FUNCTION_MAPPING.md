@@ -11,6 +11,8 @@
 | `calculateGamesWon` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
 | `calculateWinPercentage` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
 | `calculateAverageProfitPerGame` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
+| `calculateTotalRebuys` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
+| `calculateAverageRebuysPerGame` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
 | `calculatePlayerRankingByProfit` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerRanking` | `src/calculations/player/ranking.ts` |
 | `calculatePlayerRankingByAverageProfit` | `src/utils/calculators/statisticsCalculator.ts` | `calculatePlayerRanking` | `src/calculations/player/ranking.ts` |
 | `getPlayerStatistics` | `src/services/statistics/playerStatistics.ts` | `calculatePlayerStats` | `src/calculations/player/stats.ts` |
@@ -23,6 +25,7 @@
 | `calculatePlayerInvestment` | `src/utils/gameCalculations.ts` | `calculatePlayerInvestment` | `src/calculations/legacy/gameBridge.ts` |
 | `calculateInitialPlayerResult` | `src/utils/gameCalculations.ts` | `calculateInitialPlayerResult` | `src/calculations/legacy/gameBridge.ts` |
 | `calculateFinalPlayerResult` | `src/utils/gameCalculations.ts` | `calculateFinalPlayerResult` | `src/calculations/legacy/gameBridge.ts` |
+| `calculateInitialGameSummary` | `src/utils/gameCalculations.ts` | `calculateInitialGameSummary` | `src/calculations/legacy/gameBridge.ts` |
 | `calculateGameSummary` | `src/utils/gameCalculations.ts` | `calculateGameResults` | `src/calculations/game/results.ts` |
 | `calculateOptimalPayments` | `src/utils/gameCalculations.ts` | `calculateOptimalPayments` | `src/calculations/game/payments.ts` |
 | `getGameStatistics` | `src/services/statistics/gameStatistics.ts` | `calculateGameResults` | `src/calculations/game/results.ts` |

@@ -156,7 +156,7 @@ export default function UsersScreen() {
       if (userToDelete.paymentUnit) {
         const { unitId, otherPlayerId } = userToDelete.paymentUnit;
         await updateUser(otherPlayerId, { 
-          paymentUnitId: null,
+          paymentUnitId: undefined,
           updatedAt: Date.now()
         });
         await updatePaymentUnit(unitId, {
@@ -339,11 +339,12 @@ export default function UsersScreen() {
 
               <View style={{ 
                 flexDirection: 'row', 
-                justifyContent: 'flex-start',
+                justifyContent: 'space-between',
                 marginTop: 8 
               }}>
                 <Button
                   icon="pencil"
+                  iconColor={CASINO_COLORS.gold}
                   iconSize={24}
                   variant="ghost"
                   style={{ 
@@ -359,6 +360,7 @@ export default function UsersScreen() {
                 />
                 <Button
                   icon="trash-can"
+                  iconColor="#ef4444"
                   iconSize={24}
                   variant="ghost"
                   style={{ 
@@ -429,7 +431,7 @@ export default function UsersScreen() {
         borderBottomColor: CASINO_COLORS.gold,
       }}>
         <TouchableOpacity 
-          onPress={() => router.push('/dashboard')}
+          onPress={() => router.replace('/dashboard')}
           style={{ padding: 8 }}
         >
           <Icon name="arrow-right" size="medium" color={CASINO_COLORS.gold} />
@@ -516,7 +518,7 @@ export default function UsersScreen() {
         }}
         onConfirm={handleDeleteUser}
         itemName={userToDelete?.name || ''}
-        itemType="משתמש"
+        itemType="שחקן"
         message={`האם אתה בטוח שברצונך למחוק את המשתמש "${userToDelete?.name}"?\nפעולה זו תסיר את המשתמש מכל הקבוצות ומיחידת התשלום שלו.`}
       />
 

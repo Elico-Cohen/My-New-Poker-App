@@ -60,12 +60,15 @@ export interface GameStatsSummary {
     totalPurchases: number; // סך כל הקניות (באי-אין + ריבאי) של כל השחקנים בכל המשחקים
     averageRebuysPerGame: number;
     averageRebuysPerPlayer: number;
+    averagePurchasesPerPlayer: number; // ממוצע קניות לשחקן (מחושב לפי מספר המשתתפים הכולל)
+    gamesCount: number; // מספר המשחקים הכולל
     // החלק החדש - סטטיסטיקת קבוצות
     groupsRebuyStats?: {
       groupId: string;
       groupName: string;
       totalRebuys: number;
       totalPurchases: number;
+      gamesCount: number; // מספר המשחקים בקבוצה
     }[];
     playerWithMostRebuys: {
       playerId: string;
@@ -202,32 +205,52 @@ export interface GameStatsSummary {
   
   // Winner/Loser statistics
   export interface WinnersLosersStats {
-    topWinners: {
+    bestSingleGamePlayers: {
       playerId: string;
       playerName: string;
-      netProfit: number;
+      gamesPlayed: number;
+      gamesWon: number;
+      bestSingleGameProfit: number;
+      bestSingleGameId: string;
+      bestSingleGameDate: string;
+      cumulativeProfit: number;
       winRate: number;
     }[];
-    topLosers: {
+    bestCumulativePlayers: {
       playerId: string;
       playerName: string;
-      netLoss: number;
-      lossRate: number;
+      gamesPlayed: number;
+      gamesWon: number;
+      bestSingleGameProfit: number;
+      bestSingleGameId: string;
+      bestSingleGameDate: string;
+      cumulativeProfit: number;
+      winRate: number;
     }[];
-    biggestWin: {
+    mostWinningGamesPlayers: {
       playerId: string;
       playerName: string;
-      gameId: string;
-      date: string;
-      amount: number;
-    };
-    biggestLoss: {
+      gamesPlayed: number;
+      gamesWon: number;
+      bestSingleGameProfit: number;
+      bestSingleGameId: string;
+      bestSingleGameDate: string;
+      cumulativeProfit: number;
+      winRate: number;
+    }[];
+    bestWinRatePlayers: {
       playerId: string;
       playerName: string;
-      gameId: string;
-      date: string;
-      amount: number;
-    };
+      gamesPlayed: number;
+      gamesWon: number;
+      bestSingleGameProfit: number;
+      bestSingleGameId: string;
+      bestSingleGameDate: string;
+      cumulativeProfit: number;
+      winRate: number;
+    }[];
+    totalPlayers: number;
+    totalGames: number;
   }
   
   // Time-based filters for statistics
@@ -242,4 +265,5 @@ export interface GameStatsSummary {
     endDate?: Date;
     statuses?: string[];        // רשימת סטטוסים לסינון (למשל ['completed', 'final_results'])
     includeAllStatuses?: boolean; // אם true, לא יבוצע סינון לפי סטטוס כלל
+    _refreshToken?: string;      // מזהה רענון ייחודי - לא חלק מהמודל, משמש רק לעקיפת מטמון
   }

@@ -5,6 +5,10 @@ import { Modal } from './Modal';
 import { Button, ButtonProps } from './Button';
 import { Text } from './Text';
 
+// הגדרת צבעים שתואמת את הרקע של Modal
+const DIALOG_TEXT_COLOR = '#FFFFFF'; // לבן, כי הרקע של Modal כהה
+const DIALOG_CANCEL_TEXT_COLOR = '#FFD700'; // זהב, לנראות טובה של כפתור הביטול
+
 interface DialogProps {
   visible: boolean;
   title?: string;
@@ -45,19 +49,24 @@ export function Dialog({
     >
       <View style={styles.container}>
         {message && (
-          <Text variant="bodyNormal" style={styles.message}>
+          <Text 
+            variant="bodyNormal" 
+            style={styles.message} 
+            color={DIALOG_TEXT_COLOR}
+          >
             {message}
           </Text>
         )}
         {children}
         {!hideDefaultButtons && (
-          <View style={[styles.buttons, children && styles.buttonsWithContent]}>
+          <View style={[styles.buttons, children ? styles.buttonsWithContent : null]}>
             {cancelText && (
               <Button
                 title={cancelText}
                 variant="ghost"
                 onPress={onCancel}
                 style={[styles.button, cancelButtonProps?.style]}
+                textStyle={{ color: DIALOG_CANCEL_TEXT_COLOR }}
                 {...cancelButtonProps}
               />
             )}

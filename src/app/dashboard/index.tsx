@@ -23,7 +23,10 @@ export default function DashboardScreen() {
         justifyContent: 'space-between',
       }}>
         <TouchableOpacity
-          onPress={() => router.push('/(tabs)/home2')}
+          onPress={() => {
+            console.log('Back button pressed - navigating directly to home tab');
+            router.replace('/(tabs)/home2');
+          }}
           style={{
             width: 40,
             height: 40,

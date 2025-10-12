@@ -49,7 +49,7 @@ export const fetchAllGames = async (options: {
     );
     
     const snapshot = await getDocs(gamesQuery);
-    const games: Game[] = [];
+    const gamesMap = new Map<string, Game>(); // שימוש ב-Map כדי למנוע כפילויות
     
     const queryType = onlyCompleted ? 'שהושלמו' : '';
     console.log(`GameDataManager: Firebase החזיר ${snapshot.size} משחקים ${queryType}`);
@@ -89,11 +89,21 @@ export const fetchAllGames = async (options: {
           };
         }
         
-        games.push(gameData as Game);
+        // הוסף רק אם עדיין לא קיים משחק עם אותו ID (מנע כפילויות)
+        if (!gamesMap.has(doc.id)) {
+          gamesMap.set(doc.id, gameData as Game);
+          console.log(`GameDataManager: הוסיפו משחק ${doc.id} למפה`);
+        } else {
+          console.warn(`GameDataManager: נמצא משחק כפול עם ID ${doc.id}, מתעלם`);
+        }
       } catch (err) {
         console.error(`GameDataManager: שגיאה בעיבוד משחק ${doc.id}:`, err);
       }
     });
+    
+    // המרה מ-Map למערך
+    const games = Array.from(gamesMap.values());
+    console.log(`GameDataManager: אחרי deduplication: ${games.length} משחקים (מתוך ${snapshot.size} במקור)`);
     
     // הורדת כל הקבוצות לצורך מיפוי שמות
     try {

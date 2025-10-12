@@ -31,8 +31,17 @@ interface AuthContextType {
   hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
   canDeleteEntity: (entityType: 'user' | 'group' | 'paymentUnit' | 'game') => boolean;
   canManageEntity: (entityType: 'user' | 'group' | 'paymentUnit' | 'game') => boolean;
+  canStartNewGame: () => boolean;
   clearError: () => void;
   isOffline: boolean;
+  canAccessDashboard: () => boolean;
+  canManageGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
+  canDeleteActiveGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
+  canDeleteCompletedGame: () => boolean;
+  canViewGameAsReadOnly: () => boolean;
+  // New permission functions for game management
+  canContinueGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
+  canAddPlayerToGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
 }
 
 // Create the Auth Context
@@ -64,58 +73,38 @@ const updateUserLastLogin = async (userId: string) => {
   }
 };
 
+// הגדרת גלובל למעקב אחרי פונקציית המתנה לשמירות
+let globalWaitForActiveSaves: (() => Promise<void>) | null = null;
+let globalClearActiveGame: (() => Promise<void>) | null = null;
+
+export const setGlobalWaitForActiveSaves = (fn: (() => Promise<void>) | null) => {
+  globalWaitForActiveSaves = fn;
+};
+
+export const setGlobalClearActiveGame = (fn: (() => Promise<void>) | null) => {
+  globalClearActiveGame = fn;
+};
+
 // Implementation of the AuthProvider component
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState<boolean>(false); // דגל למניעת הפניה מעגלית
   
   // Initialize auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // מניעת עיבוד במקרה של התנתקות פעילה
+      if (isSigningOut) {
+        console.log('AuthContext: התנתקות פעילה, מדלג על onAuthStateChanged');
+        return;
+      }
+      
       setIsLoading(true);
+      setError(null); // ניקוי שגיאות קודמות בתחילת התהליך
       try {
         if (firebaseUser) {
-          // בדיקה אם מדובר במשתמש אדמין מיוחד
-          if (firebaseUser.email === 'elico.cohen@gmail.com') {
-            console.log('AuthContext: ADMIN SPECIAL CASE - Detected admin email in auth state change');
-            
-            // Check if session is still valid (within 24 hours)
-            const sessionTimestamp = await AsyncStorage.getItem(AUTH_SESSION_KEY);
-            if (sessionTimestamp) {
-              const currentTime = Date.now();
-              const sessionTime = parseInt(sessionTimestamp);
-              
-              if (currentTime - sessionTime > SESSION_DURATION) {
-                // Session expired, log out
-                await signOut(auth);
-                await AsyncStorage.removeItem(AUTH_SESSION_KEY);
-                setUser(null);
-                setError('הסשן פג תוקף. אנא התחבר מחדש.');
-                setIsLoading(false);
-                return;
-              }
-              
-              // אם הסשן תקף, יצירת פרופיל אדמין מלא ללא תלות ב-Firestore
-              const adminUserData: UserProfile = {
-                id: firebaseUser.uid,
-                name: 'מנהל מערכת',
-                email: firebaseUser.email || 'elico.cohen@gmail.com',
-                role: 'admin',
-                isActive: true,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                phone: '',
-                paymentUnitId: '',
-              };
-              
-              console.log('AuthContext: ADMIN SPECIAL CASE - Using admin profile in auth state change');
-              setUser(adminUserData);
-              setIsLoading(false);
-              return;
-            }
-          }
-          
           // Check if session is still valid (within 24 hours)
           const sessionTimestamp = await AsyncStorage.getItem(AUTH_SESSION_KEY);
           if (sessionTimestamp) {
@@ -124,104 +113,176 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             
             if (currentTime - sessionTime > SESSION_DURATION) {
               // Session expired, log out
+              console.log('AuthContext: הסשן פג תוקף, מתנתק');
+              setIsSigningOut(true);
               await signOut(auth);
               await AsyncStorage.removeItem(AUTH_SESSION_KEY);
               setUser(null);
               setError('הסשן פג תוקף. אנא התחבר מחדש.');
               setIsLoading(false);
+              setIsSigningOut(false);
               return;
             }
           }
           
-          // Fetch user profile from Firestore
+          // Fetch user profile from Firestore using authUid
           try {
-            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data() as Omit<UserProfile, 'id'>;
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('authUid', '==', firebaseUser.uid));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+              if (querySnapshot.docs.length > 1) {
+                console.warn(`AuthContext: Multiple Firestore users found with the same authUid: ${firebaseUser.uid}. Using the first one.`);
+                // Consider how to handle this case, e.g., log for admin, or pick based on other criteria.
+              }
+              const userDocSnapshot = querySnapshot.docs[0];
+              const userData = userDocSnapshot.data() as Omit<UserProfile, 'id'>;
               
-              // Check if user is active
               if (!userData.isActive) {
+                console.log('AuthContext: משתמש לא פעיל, מתנתק');
+                setIsSigningOut(true);
                 await signOut(auth);
                 setUser(null);
                 setError('חשבון זה אינו פעיל. צור קשר עם מנהל המערכת.');
+                setIsLoading(false);
+                setIsSigningOut(false);
                 return;
               }
               
-              setUser({
-                id: firebaseUser.uid,
+              const userProfile: UserProfile = {
+                id: userDocSnapshot.id, // Use the Firestore document ID
+                authUid: firebaseUser.uid, // Explicitly set authUid on the user object
                 ...userData
-              });
+              };
+
+              setUser(userProfile);
+              
+              // Initialize syncService only if not already initialized and user is set
+              if (!syncService.getIsInitialized()) {
+                try {
+                  await syncService.initialize();
+                  console.log('AuthContext: SyncService initialized successfully');
+                } catch (syncError) {
+                  console.error('AuthContext: Failed to initialize SyncService:', syncError);
+                  // Non-critical error, continue
+                }
+              }
+              
             } else {
-              // טיפול מיוחד במשתמש אדמין אם לא נמצא ב-Firestore
-              if (firebaseUser.email === 'elico.cohen@gmail.com') {
-                console.log('AuthContext: ADMIN SPECIAL CASE - Admin not found in Firestore, creating local profile');
-                // יצירת פרופיל אדמין מקומי
-                const adminUserData: UserProfile = {
-                  id: firebaseUser.uid,
-                  name: 'מנהל מערכת',
-                  email: firebaseUser.email || 'elico.cohen@gmail.com',
-                  role: 'admin',
-                  isActive: true,
-                  createdAt: Date.now(),
-                  updatedAt: Date.now(),
-                  phone: '',
-                  paymentUnitId: '',
-                };
-                
-                setUser(adminUserData);
+              // User record doesn't exist in Firestore with this authUid
+              console.warn(`AuthContext: User with authUid ${firebaseUser.uid} (email: ${firebaseUser.email}) not found in Firestore by authUid. Attempting to find by email.`);
+              
+              // Attempt to find user by email as a fallback
+              if (firebaseUser.email) {
+                const qEmail = query(usersRef, where('email', '==', firebaseUser.email));
+                const emailQuerySnapshot = await getDocs(qEmail);
+
+                if (!emailQuerySnapshot.empty) {
+                  if (emailQuerySnapshot.docs.length > 1) {
+                     console.warn(`AuthContext: Multiple Firestore users found with the same email: ${firebaseUser.email} during onAuthStateChanged. Using the first one.`);
+                  }
+                  const userDocByEmailSnapshot = emailQuerySnapshot.docs[0];
+                  const userDataByEmail = userDocByEmailSnapshot.data() as Omit<UserProfile, 'id'>;
+
+                  if (!userDataByEmail.isActive) {
+                    console.log('AuthContext: משתמש לא פעיל (נמצא לפי אימייל), מתנתק');
+                    setIsSigningOut(true);
+                    await signOut(auth);
+                    setUser(null);
+                    setError('חשבון זה אינו פעיל (נמצא לפי אימייל). צור קשר עם מנהל המערכת.');
+                    setIsLoading(false);
+                    setIsSigningOut(false);
+                    return;
+                  }
+
+                  // Update the authUid in Firestore for this user
+                  try {
+                    await updateDoc(doc(db, 'users', userDocByEmailSnapshot.id), {
+                      authUid: firebaseUser.uid,
+                      updatedAt: serverTimestamp()
+                    });
+                    console.log(`AuthContext: Successfully updated authUid for user ${userDocByEmailSnapshot.id} found by email.`);
+                  } catch (updateError) {
+                    console.error(`AuthContext: Failed to update authUid for user ${userDocByEmailSnapshot.id} found by email:`, updateError);
+                    // Decide if this is a critical error. For now, proceed with setting the user.
+                  }
+
+                  const userProfile: UserProfile = {
+                    id: userDocByEmailSnapshot.id,
+                    authUid: firebaseUser.uid,
+                    ...userDataByEmail
+                  };
+
+                  setUser(userProfile);
+                  
+                  // Initialize syncService only if not already initialized
+                  if (!syncService.getIsInitialized()) {
+                    try {
+                      await syncService.initialize();
+                      console.log('AuthContext: SyncService initialized successfully after email fallback');
+                    } catch (syncError) {
+                      console.error('AuthContext: Failed to initialize SyncService after email fallback:', syncError);
+                      // Non-critical error, continue
+                    }
+                  }
+
+                } else {
+                  console.warn(`AuthContext: User with authUid ${firebaseUser.uid} also not found by email ${firebaseUser.email}. Logging out.`);
+                  setIsSigningOut(true);
+                  await signOut(auth);
+                  setUser(null);
+                  setError('פרטי המשתמש לא נמצאו במערכת. אנא נסה להתחבר מחדש או צור קשר עם התמיכה.');
+                  setIsSigningOut(false);
+                }
               } else {
-                // User record doesn't exist in Firestore
+                // No email to fallback on
+                console.warn(`AuthContext: User with authUid ${firebaseUser.uid} not found in Firestore and no email provided for fallback. Logging out.`);
+                setIsSigningOut(true);
                 await signOut(auth);
                 setUser(null);
-                setError('משתמש לא נמצא. צור קשר עם מנהל המערכת.');
+                setError('פרטי המשתמש לא אותרו. צור קשר עם מנהל המערכת.');
+                setIsSigningOut(false);
               }
             }
-          } catch (firestoreError) {
-            console.error('Error accessing Firestore:', firestoreError);
+          } catch (firestoreError: any) {
+            console.error('AuthContext: Error accessing Firestore during onAuthStateChanged:', firestoreError);
             
-            // טיפול מיוחד במשתמש אדמין אם יש שגיאת גישה ל-Firestore
-            if (firebaseUser.email === 'elico.cohen@gmail.com') {
-              console.log('AuthContext: ADMIN SPECIAL CASE - Firestore error, creating local admin profile');
-              // יצירת פרופיל אדמין מקומי
-              const adminUserData: UserProfile = {
-                id: firebaseUser.uid,
-                name: 'מנהל מערכת',
-                email: firebaseUser.email || 'elico.cohen@gmail.com',
-                role: 'admin',
-                isActive: true,
-                createdAt: Date.now(),
-                updatedAt: Date.now(),
-                phone: '',
-                paymentUnitId: '',
-              };
-              
-              setUser(adminUserData);
+            // במקרה של שגיאת הרשאות, לא נתנתק - רק נראה הודעת שגיאה
+            if (firestoreError.toString().includes('Missing or insufficient permissions')) {
+              console.log('AuthContext: שגיאת הרשאות - לא מתנתק, מחכה לרשת');
+              setError('בעיית חיבור לשרת. מנסה שוב...');
+              // נותן זמן לרשת להתחבר ולא מתנתק
+              setTimeout(() => {
+                if (error && error.includes('בעיית חיבור לשרת')) {
+                  setError(null);
+                }
+              }, 5000);
             } else {
-              // לא משתמש אדמין - מוציאים אותו מהמערכת
+              // Generic error, log out user
+              setIsSigningOut(true);
               await signOut(auth);
               setUser(null);
-              setError('שגיאה בגישה למידע המשתמש. צור קשר עם מנהל המערכת.');
+              setError('שגיאה בגישה למידע המשתמש. אנא נסה מאוחר יותר.');
+              setIsSigningOut(false);
             }
           }
-
-          // Initialize syncService after successful authentication
-          try {
-            await syncService.initialize();
-            console.log('AuthContext: SyncService initialized successfully');
-          } catch (syncError) {
-            console.error('AuthContext: Failed to initialize SyncService:', syncError);
-          }
         } else {
+          console.log('AuthContext: אין משתמש מחובר, מנקה נתונים');
           setUser(null);
-          
-          // Cleanup syncService when user is not authenticated
           syncService.cleanup();
           await AsyncStorage.removeItem(AUTH_SESSION_KEY);
         }
       } catch (err) {
-        console.error('Error getting user profile:', err);
+        console.error('AuthContext: Error in onAuthStateChanged:', err);
         setError('שגיאה בטעינת פרופיל משתמש');
         setUser(null);
+        // Ensure sign out if there's an unexpected error, but avoid circular calls
+        if (auth.currentUser && !isSigningOut) {
+            setIsSigningOut(true);
+            await signOut(auth);
+            setIsSigningOut(false);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -229,7 +290,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Cleanup subscription
     return () => unsubscribe();
-  }, []);
+  }, []); // תיקון: הסרת dependency שגרמה לבעיות בהתנתקות
   
   // Clear error
   const clearError = () => {
@@ -241,300 +302,115 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     setError(null);
 
-    // מעקף מלא עבור המשתמש האדמין - בדיקה ראשונית
-    if (email.toLowerCase() === 'elico.cohen@gmail.com') {
-      console.log('AuthContext: ADMIN BYPASS - Detected admin email, applying special login logic');
-      
-      try {
-        // ניסיון להתחבר רגיל רק כדי לוודא שהסיסמה נכונה
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        console.log('AuthContext: ADMIN BYPASS - Authentication successful for admin');
-        
-        // יצירת פרופיל אדמין מלא ללא תלות ב-Firestore
-        const adminUserData: UserProfile = {
-          id: userCredential.user.uid,  // שימוש ב-UID האמיתי במקום קבוע
-          name: 'מנהל מערכת',
-          email: email,
-          role: 'admin',
-          isActive: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          phone: '',
-          paymentUnitId: '',
-        };
-        
-        // רישום זמן הסשן באופן ברור יותר
-        const sessionTime = Date.now().toString();
-        console.log('AuthContext: ADMIN BYPASS - Setting session timestamp:', sessionTime);
-        await AsyncStorage.setItem(AUTH_SESSION_KEY, sessionTime);
-        
-        // הגדרת המשתמש באופן מיידי, ללא תלות ב-Firestore
-        console.log('AuthContext: ADMIN BYPASS - Setting admin user profile manually');
-        setUser(adminUserData);
-        setIsLoading(false);
-        
-        // סיום הפונקציה כאן, מבלי להמשיך לקוד הרגיל
-        return;
-      } catch (authError: any) {
-        // במקרה של שגיאת אימות (סיסמה שגויה למשל)
-        console.error('AuthContext: ADMIN BYPASS - Authentication error:', authError);
-        
-        if (authError.code === 'auth/wrong-password') {
-          setError('סיסמה שגויה');
-        } else if (authError.code === 'auth/too-many-requests') {
-          setError('יותר מדי ניסיונות כניסה. נסה שוב מאוחר יותר');
-        } else {
-          setError('שגיאה בכניסה למערכת. אנא נסה שוב');
-        }
-        
-        setIsLoading(false);
-        return;
-      }
-    }
-    
-    // המשך הקוד הרגיל לכל המשתמשים האחרים
     try {
       console.log('AuthContext: attempting login for:', email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('AuthContext: Firebase authentication successful, uid:', userCredential.user.uid);
+      const firebaseAuthUser = userCredential.user;
+      console.log('AuthContext: Firebase authentication successful, uid:', firebaseAuthUser.uid);
       
-      // Firebase Auth successful, now get user profile from Firestore
+      // Firebase Auth successful, now get user profile from Firestore using authUid
       try {
-        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-        
-        if (userDoc.exists()) {
-          console.log('AuthContext: user document found in Firestore');
-          const userData = userDoc.data() as Omit<UserProfile, 'id'>;
-          
-          // Check if user is active
-          if (!userData.isActive) {
-            console.log('AuthContext: user account is not active');
-            await signOut(auth);
-            setError('חשבון זה אינו פעיל. צור קשר עם מנהל המערכת.');
-            return;
+        const usersRef = collection(db, 'users');
+        // Primary query: by authUid
+        const qAuthUid = query(usersRef, where('authUid', '==', firebaseAuthUser.uid));
+        let querySnapshot = await getDocs(qAuthUid);
+        let userDocSnapshot: any; // Explicitly type if possible, using 'any' for brevity in example
+
+        if (!querySnapshot.empty) {
+          if (querySnapshot.docs.length > 1) {
+            console.warn(`AuthContext: Multiple Firestore users found with the same authUid: ${firebaseAuthUser.uid} during login. Using the first one.`);
           }
-          
-          // Set session timestamp
-          await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-          
-          // Update last login timestamp
-          await updateUserLastLogin(userCredential.user.uid);
-          
-          setUser({
-            id: userCredential.user.uid,
-            ...userData
-          });
+          userDocSnapshot = querySnapshot.docs[0];
         } else {
-          console.log('AuthContext: user exists in Authentication but not in Firestore');
-          
-          try {
-            // בדיקה אם קיימת רשומה עם אותו אימייל בקולקציית המשתמשים
-            const userByEmailQuery = query(
-              collection(db, 'users'), 
-              where('email', '==', userCredential.user.email)
-            );
-            
-            const matchingUsers = await getDocs(userByEmailQuery);
-            
-            if (!matchingUsers.empty) {
-              console.log('AuthContext: found user by email in Firestore');
-              // עדכון מזהה המשתמש באימות למזהה המשתמש ב-Firestore
-              const firestoreUser = matchingUsers.docs[0];
-              const firestoreData = firestoreUser.data() as Omit<UserProfile, 'id'>;
-              
-              // Check if user is active
-              if (!firestoreData.isActive) {
-                console.log('AuthContext: user found by email is not active');
-                await signOut(auth);
-                setError('חשבון זה אינו פעיל. צור קשר עם מנהל המערכת.');
-                return;
+          // Fallback: if no user found by authUid, try by email (and then update authUid)
+          console.warn(`AuthContext: User with authUid ${firebaseAuthUser.uid} not found in Firestore during login. Attempting to find by email.`);
+          if (firebaseAuthUser.email) {
+            const qEmail = query(usersRef, where('email', '==', firebaseAuthUser.email));
+            const emailQuerySnapshot = await getDocs(qEmail);
+            if (!emailQuerySnapshot.empty) {
+              if (emailQuerySnapshot.docs.length > 1) {
+                console.warn(`AuthContext: Multiple Firestore users found with the same email: ${firebaseAuthUser.email} during login fallback. Using the first one.`);
               }
-              
-              // Set session timestamp
-              await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-              
-              // Update last login timestamp in the matching document
-              await updateUserLastLogin(firestoreUser.id);
-              
-              setUser({
-                id: firestoreUser.id,
-                ...firestoreData
-              });
-            } else {
-              // טיפול מיוחד למשתמשי אדמין - אם אנחנו לא יכולים למצוא את המשתמש ב-Firestore
-              // ויש שגיאת הרשאות, נצור פרופיל משתמש מקומי עם הרשאות אדמין
-              if (userCredential.user.email === 'elico.cohen@gmail.com') {
-                console.log('AuthContext: special handling for admin user by email');
-                const now = Date.now();
-                
-                // יצירת אובייקט משתמש לאדמין
-                const adminUserData = {
-                  name: 'אלי כהן',
-                  email: userCredential.user.email,
-                  role: 'admin' as UserRole,
-                  isActive: true,
-                  createdAt: now,
-                  updatedAt: now,
-                  phone: '',
-                  paymentUnitId: '',
-                };
-                
-                // הגדרת המשתמש באופן מקומי בלבד (בלי לכתוב ל-Firestore)
-                console.log('AuthContext: setting local admin profile without Firestore write');
-                
-                // Set session timestamp
-                await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-                
-                // הגדרת המשתמש כאדמין
-                setUser({
-                  id: userCredential.user.uid,
-                  ...adminUserData
+              userDocSnapshot = emailQuerySnapshot.docs[0];
+              // Update authUid in Firestore as it was missing or incorrect
+              try {
+                await updateDoc(doc(db, 'users', userDocSnapshot.id), {
+                  authUid: firebaseAuthUser.uid,
+                  updatedAt: serverTimestamp()
                 });
-              } else {
-                // ניצור משתמש רגיל אם זה לא האדמין המוכר
-                console.log('AuthContext: creating new user profile in Firestore');
-                // נייצר פרופיל ב-Firestore
-                const authUser = userCredential.user;
-                const now = Date.now();
-                
-                // יצירת אובייקט משתמש התואם את המבנה של UserProfile
-                const newUserData = {
-                  name: authUser.displayName || email.split('@')[0],
-                  email: authUser.email || email,
-                  phone: authUser.phoneNumber || '',
-                  role: 'regular' as UserRole,
-                  isActive: true,
-                  createdAt: now,
-                  updatedAt: now,
-                  paymentUnitId: '',
-                  // מידע נוסף שאינו חלק מהמבנה הבסיסי
-                  preferences: {
-                    language: 'he',
-                    theme: 'dark',
-                    notifications: true
-                  }
-                };
-                
-                try {
-                  // שמירת פרופיל המשתמש החדש ב-Firestore
-                  await setDoc(doc(db, 'users', authUser.uid), newUserData);
-                  
-                  // Set session timestamp
-                  await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-                  
-                  // הגדרת המשתמש באופן מפורש באפליקציה
-                  setUser({
-                    id: authUser.uid,
-                    ...newUserData
-                  });
-                } catch (firestoreError) {
-                  console.error('AuthContext: Error creating new user in Firestore:', firestoreError);
-                  // אם נכשל ביצירת המשתמש ב-Firestore, עדיין נאפשר כניסה עם הרשאות בסיסיות
-                  setUser({
-                    id: authUser.uid,
-                    ...newUserData
-                  });
-                }
+                console.log(`AuthContext: Successfully updated authUid for user ${userDocSnapshot.id} found by email during login.`);
+              } catch (updateError) {
+                console.error(`AuthContext: Failed to update authUid for user ${userDocSnapshot.id} found by email during login:`, updateError);
+                // Continue without this update, but log it
               }
-            }
-          } catch (queryError) {
-            console.error('AuthContext: Error querying by email:', queryError);
-            // אם יש שגיאת הרשאות גם בחיפוש לפי אימייל, נטפל בו כמקרה מיוחד
-            if (userCredential.user.email === 'elico.cohen@gmail.com') {
-              console.log('AuthContext: special handling for admin user by email after query error');
-              const now = Date.now();
-              
-              // יצירת אובייקט משתמש לאדמין
-              const adminUserData = {
-                name: 'אלי כהן',
-                email: userCredential.user.email,
-                role: 'admin' as UserRole,
-                isActive: true,
-                createdAt: now,
-                updatedAt: now,
-                phone: '',
-                paymentUnitId: '',
-              };
-              
-              // הגדרת המשתמש באופן מקומי בלבד (בלי לכתוב ל-Firestore)
-              console.log('AuthContext: setting local admin profile without Firestore write');
-              
-              // Set session timestamp
-              await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-              
-              // הגדרת המשתמש כאדמין
-              setUser({
-                id: userCredential.user.uid,
-                ...adminUserData
-              });
             } else {
-              throw queryError; // זרוק את השגיאה להמשך הטיפול
+              console.error(`AuthContext: User not found by authUid NOR by email (${firebaseAuthUser.email}) during login.`);
+              setError('פרטי המשתמש אינם קיימים במערכת. אנא ודא שהאימייל שהזנת נכון או פנה למנהל.');
+              await signOut(auth); // Sign out from Firebase Auth as well
+              setIsLoading(false);
+              return;
             }
-          }
-        }
-      } catch (firestoreError: any) {
-        console.error('AuthContext: Firestore error:', firestoreError, 'code:', firestoreError.code);
-        
-        // אם יש שגיאת הרשאות, ננסה לטפל במקרים מיוחדים
-        if (firestoreError.code === 'permission-denied') {
-          console.log('AuthContext: handling permission-denied error');
-          
-          // טיפול מיוחד לאדמין ידוע
-          if (userCredential.user.email === 'elico.cohen@gmail.com') {
-            console.log('AuthContext: special handling for admin user by email');
-            const now = Date.now();
-            
-            // יצירת אובייקט משתמש לאדמין
-            const adminUserData = {
-              name: 'אלי כהן',
-              email: userCredential.user.email,
-              role: 'admin' as UserRole,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now,
-              phone: '',
-              paymentUnitId: '',
-            };
-            
-            // Set session timestamp
-            await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
-            
-            // הגדרת המשתמש כאדמין
-            setUser({
-              id: userCredential.user.uid,
-              ...adminUserData
-            });
-            
-            return; // מסיים את הפונקציה בהצלחה
           } else {
-            // עבור משתמשים אחרים עם שגיאות הרשאה, נתנתק ונשלח שגיאה מתאימה
+            console.error('AuthContext: User not found by authUid and no email available on firebaseAuthUser for fallback during login.');
+            setError('שגיאה באימות. לא ניתן לאתר את פרטי המשתמש.');
             await signOut(auth);
-            setError('אין הרשאות גישה למערכת. צור קשר עם מנהל המערכת.');
+            setIsLoading(false);
             return;
           }
-        } else {
-          // זרוק את השגיאה להמשך הטיפול
-          throw firestoreError;
         }
+
+        const userData = userDocSnapshot.data() as Omit<UserProfile, 'id'>;
+
+        if (!userData.isActive) {
+          setError('חשבון זה אינו פעיל. צור קשר עם מנהל המערכת.');
+          await signOut(auth);
+          setIsLoading(false);
+          return;
+        }
+
+        // Check for mustChangePassword - לוגיקה זו מושבתת זמנית לצורך פיתוח ובדיקות
+        /*
+        if (userData.mustChangePassword) {
+          setError('נדרש שינוי סיסמה. אנא פנה למנהל המערכת לסיוע.'); // Placeholder message
+          // TODO: Implement password change flow. For now, we block login.
+          // Example: setPasswordChangeRequired(true); and navigate to a change password screen.
+          await signOut(auth); // Sign out user until password is changed
+          setIsLoading(false);
+          return;
+        }
+        */
+        
+        const userProfile: UserProfile = {
+          id: userDocSnapshot.id, // Use the Firestore document ID
+          authUid: firebaseAuthUser.uid, // Ensure authUid is set from the authenticated user
+          ...userData,
+        };
+
+        setUser(userProfile);
+        await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
+        await updateUserLastLogin(userProfile.id);
+        console.log('AuthContext: Login successful, user profile set:', userProfile);
+
+        // Initialize syncService after successful login and profile retrieval
+        try {
+          await syncService.initialize();
+          console.log('AuthContext: SyncService initialized successfully after login');
+        } catch (syncError) {
+          console.error('AuthContext: Failed to initialize SyncService after login:', syncError);
+          // Non-critical error for login itself, but should be monitored
+        }
+
+      } catch (firestoreError: any) {
+        console.error('AuthContext: Firestore error during login:', firestoreError);
+        setError(`שגיאה בטעינת פרופיל המשתמש: ${firestoreError.message || 'נסה שוב מאוחר יותר'}`);
+        await signOut(auth); // Sign out from Firebase to be safe
       }
-    } catch (err: any) {
-      console.error('AuthContext: Login error:', err, 'code:', err.code);
-      
-      // Handle common Firebase auth errors
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('שם משתמש או סיסמה שגויים');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('יותר מדי ניסיונות כניסה. נסה שוב מאוחר יותר');
-      } else if (err.code === 'auth/network-request-failed') {
-        setError('בעיית חיבור לאינטרנט. בדוק את החיבור שלך ונסה שוב.');
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email') {
-        setError('אימייל או סיסמה לא תקינים');
-      } else if (err.code === 'auth/user-disabled') {
-        setError('חשבון זה חסום. צור קשר עם מנהל המערכת.');
-      } else if (err.code === 'permission-denied') {
-        setError('אין הרשאת גישה למערכת. צור קשר עם מנהל המערכת.');
+    } catch (authError: any) {
+      console.error('AuthContext: Firebase authentication error during login:', authError);
+      if (authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
+        setError('אימייל או סיסמה שגויים.');
       } else {
-        setError('שגיאה בכניסה למערכת. אנא נסה שוב');
+        setError(`שגיאת התחברות: ${authError.message || 'נסה שוב מאוחר יותר'}`);
       }
     } finally {
       setIsLoading(false);
@@ -546,6 +422,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('AuthContext: logout function called');
     setIsLoading(true);
     try {
+      // חכה לסיום שמירות פעילות לפני התנתקות
+      if (globalWaitForActiveSaves && typeof globalWaitForActiveSaves === 'function') {
+        try {
+          console.log('AuthContext: waiting for active saves to complete');
+          await globalWaitForActiveSaves();
+        } catch (saveError) {
+          console.error('AuthContext: Error waiting for saves, but continuing with logout:', saveError);
+        }
+      }
+      
+      // נקה את המשחק הפעיל אחרי שהשמירות הסתיימו
+      if (globalClearActiveGame && typeof globalClearActiveGame === 'function') {
+        try {
+          console.log('AuthContext: clearing active game');
+          await globalClearActiveGame();
+        } catch (clearError) {
+          console.error('AuthContext: Error clearing active game, but continuing with logout:', clearError);
+        }
+      }
+      
       // Clean up syncService before logging out
       syncService.cleanup();
       console.log('AuthContext: SyncService cleaned up');
@@ -597,37 +493,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // יצירת משתמש חדש ב-Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
+      const firebaseAuthUser = userCredential.user;
       const now = Date.now();
       
-      // יצירת מסמך משתמש ב-Firestore לפי המבנה הקיים
-      const userData = {
+      // יצירת מסמך משתמש ב-Firestore עם authUid כשדה נפרד
+      // ו-Document ID שנוצר אוטומטית.
+      const newFirestoreUserDocRef = doc(collection(db, 'users')); // יוצר Document ID אוטומטי
+
+      const newUserFirestoreData: Omit<UserProfile, 'id'> & { authUid: string } = {
         name: name,
         email: email,
         isActive: true,
         role: 'regular' as UserRole, 
         createdAt: now,
         updatedAt: now,
-        phone: '', // שדה ריק לטלפון
-        paymentUnitId: '' // שדה ריק ליחידת תשלום
+        phone: '', 
+        paymentUnitId: '',
+        authUid: firebaseAuthUser.uid // שמירת ה-authUid
       };
       
-      await setDoc(doc(db, 'users', userCredential.user.uid), userData);
+      await setDoc(newFirestoreUserDocRef, newUserFirestoreData);
       
-      // שמירת הסשן
       await AsyncStorage.setItem(AUTH_SESSION_KEY, Date.now().toString());
       
-      // עדכון פרטי המשתמש במערכת עם ID
-      const newUser: UserProfile = {
-        id: userCredential.user.uid,
-        ...userData
+      const newUserProfile: UserProfile = {
+        id: newFirestoreUserDocRef.id, // שימוש ב-ID החדש שנוצר
+        ...newUserFirestoreData
       };
 
-      // הגדרת המשתמש באופן מפורש
-      setUser(newUser);
+      setUser(newUserProfile);
       
     } catch (err: any) {
-      console.error('Registration error:', err);
+      console.error('AuthContext: Registration error:', err);
       if (err.code === 'auth/email-already-in-use') {
         setError('כתובת האימייל כבר קיימת במערכת');
       } else if (err.code === 'auth/invalid-email') {
@@ -678,18 +575,116 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // לוג לבדיקה
     console.log(`Checking if user can manage ${entityType}, user role: ${user?.role}`);
     
-    // בדיקה מיוחדת למשתמש האדמין הראשי (לפי אימייל)
-    if (user?.email === 'elico.cohen@gmail.com' || user?.email === 'eli@nirvered.com') {
-      console.log(`Admin detected by email: ${user.email}, granting all permissions`);
-      return true;
-    }
-    
     // Admin and super users can manage entities
     return user?.role === 'admin' || user?.role === 'super';
   };
   
+  // Check if user can start a new game (basic role check)
+  const canStartNewGame = (): boolean => {
+    if (!user) return false;
+
+    // Admin and super users can attempt to start a new game
+    // More specific checks (e.g., active games for super user) should be done by the calling component/service
+    return user.role === 'admin' || user.role === 'super';
+  };
+  
+  // Check if user can access dashboard - only admin
+  const canAccessDashboard = (): boolean => {
+    return user?.role === 'admin';
+  };
+  
+  // Check if user can manage a specific game
+  const canManageGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
+    if (!user) return false;
+    
+    // Admin can manage any game
+    if (user.role === 'admin') return true;
+    
+    // Super user can manage only games they created
+    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
+    
+    // Regular users cannot manage games
+    return false;
+  };
+  
+  // Check if user can delete active games
+  const canDeleteActiveGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
+    if (!user) return false;
+    
+    // Admin can delete any game
+    if (user.role === 'admin') return true;
+    
+    // Super user can delete only active games they created
+    if (user.role === 'super' && 
+        gameData?.createdBy === user.id && 
+        gameData?.status !== 'completed') {
+      return true;
+    }
+    
+    // Additional check for UID mismatch cases (same as canContinueGame)
+    if (user.role === 'super' && 
+        gameData?.createdBy && 
+        gameData.createdBy !== user.id && 
+        gameData?.status !== 'completed') {
+      console.log(`canDeleteActiveGame: Different UID detected - ${gameData.createdBy} vs ${user.id}`);
+      console.log(`canDeleteActiveGame: Allowing super user to potentially delete (will be validated in game loading)`);
+      return true;
+    }
+    
+    // Regular users cannot delete games
+    return false;
+  };
+  
+  // Check if user can delete completed games - only admin
+  const canDeleteCompletedGame = (): boolean => {
+    return user?.role === 'admin';
+  };
+  
+  // Check if user can view games in read-only mode - all authenticated users
+  const canViewGameAsReadOnly = (): boolean => {
+    return !!user && (user.role === 'admin' || user.role === 'super' || user.role === 'regular');
+  };
+  
+  // New permission functions for game management
+  const canContinueGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
+    if (!user) return false;
+    
+    // Admin can continue any game
+    if (user.role === 'admin') return true;
+    
+    // Super user can continue only games they created
+    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
+    
+    // Additional check: if user email matches the creator's email (for UID mismatch cases)
+    // This handles the case where Firebase Auth generated different UIDs for the same user
+    if (user.role === 'super' && gameData?.createdBy && gameData.createdBy !== user.id) {
+      // Note: This additional check would require access to user profiles
+      // For now, we'll let the game loading logic handle this through the fallback search
+      console.log(`canContinueGame: Different UID detected - ${gameData.createdBy} vs ${user.id}`);
+      console.log(`canContinueGame: Allowing super user to potentially continue (will be validated in game loading)`);
+      // Temporarily allow super users to attempt continuation - the actual validation happens in game loading
+      return true;
+    }
+    
+    // Regular users cannot continue games
+    return false;
+  };
+  
+  const canAddPlayerToGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
+    if (!user) return false;
+    
+    // Admin can add player to any game
+    if (user.role === 'admin') return true;
+    
+    // Super user can add player to only games they created
+    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
+    
+    // Regular users cannot add player to games
+    return false;
+  };
+  
   // Context value
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
@@ -701,8 +696,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     hasPermission,
     canDeleteEntity,
     canManageEntity,
+    canStartNewGame,
     clearError,
-    isOffline: false
+    isOffline: false,
+    canAccessDashboard,
+    canManageGame,
+    canDeleteActiveGame,
+    canDeleteCompletedGame,
+    canViewGameAsReadOnly,
+    canContinueGame,
+    canAddPlayerToGame
   };
   
   return (

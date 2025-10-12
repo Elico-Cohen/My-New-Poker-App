@@ -1,13 +1,19 @@
 // src/components/dashboard/EditUserDialog.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   ScrollView,
   I18nManager,
   StyleSheet,
   TouchableOpacity,
-  Dimensions
+  Dimensions,
+  TouchableWithoutFeedback,
+  Pressable,
+  GestureResponderEvent,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
+import { deleteField } from 'firebase/firestore';
 import { Dialog } from '@/components/common/Dialog';
 import { Input } from '@/components/common/Input';
 import { Dropdown } from '@/components/common/Dropdown';
@@ -20,13 +26,14 @@ import { Group } from '@/models/Group';
 import { getAllUsers, updateUser } from '@/services/users';
 import { getAllActiveGroups, getGroupById, updateGroup } from '@/services/groups';
 import { getPaymentUnitById, updatePaymentUnit } from '@/services/paymentUnits';
+import { createNewPlayerAndAddToGroup, createAuthUserAndUpdateFirestore, deleteAuthUserByEmail } from '@/services/playerManagement/playerManagement';
 
 // Enable RTL
 I18nManager.forceRTL(true);
 
-// קביעת גובה הדיאלוג כ-90% מגובה המסך, וכפתורי הדיאלוג (שמירה וביטול) תופסים כ-80 פיקסלים
-const dialogHeight = Dimensions.get('window').height * 0.9;
-const contentHeight = dialogHeight - 80;
+// קביעת גובה הדיאלוג כ-80% מגובה המסך
+const dialogHeight = Dimensions.get('window').height * 0.8;
+const contentHeight = dialogHeight - 120; // משאיר יותר מקום לכפתורים
 
 const CASINO_COLORS = {
   background: '#0D1B1E',
@@ -58,6 +65,27 @@ interface EditableGroup {
   wasSelected: boolean;
 }
 
+// פונקציה שמאפשרת שימוש ב-TouchableOpacity אבל מעבירה אירועי גלילה
+const TouchableThatPassesScroll = ({ 
+  children, 
+  onPress, 
+  ...props 
+}: { 
+  children: React.ReactNode; 
+  onPress?: () => void; 
+  [key: string]: any; 
+}) => {
+  return (
+    <Pressable
+      onPress={onPress}
+      delayLongPress={300}
+      {...props}
+    >
+      {children}
+    </Pressable>
+  );
+};
+
 export function EditUserDialog({
   visible,
   onClose,
@@ -69,13 +97,21 @@ export function EditUserDialog({
   const [formData, setFormData] = useState({
     name: user.name,
     phone: user.phone,
+    email: user.email || '',
     role: user.role as UserRole,
     isActive: user.isActive
   });
-  const [originalData, setOriginalData] = useState({ ...formData });
+  const [originalData, setOriginalData] = useState({
+    name: user.name,
+    phone: user.phone,
+    email: user.email || '',
+    role: user.role,
+    isActive: user.isActive
+  });
   // הודעות שגיאה מתחת לשדות
   const [nameError, setNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   // Groups state
   const [groups, setGroups] = useState<EditableGroup[]>([]);
@@ -110,11 +146,52 @@ export function EditUserDialog({
   const hasChanges =
     formData.name !== originalData.name ||
     formData.phone !== originalData.phone ||
+    formData.email !== originalData.email ||
     formData.role !== originalData.role ||
     formData.isActive !== originalData.isActive ||
     groups.some(group => group.isSelected !== group.wasSelected) ||
     (paymentUnitDetails && paymentUnitActive !== paymentUnitDetails.isActive) ||
     (pendingPaymentUnitToggle !== null);
+
+  // רפרנס לפקד ScrollView שמאפשר לנו לגלול תכנית כשצריך
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  
+  // טיפול בגלילה ידנית
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
+  
+  // מעקב מגע ראשוני להחלטה אם מדובר בגלילה
+  const [touchStartY, setTouchStartY] = useState(0);
+  
+  // פונקציה שמחליטה אם צריך לעצור פרופגציה של אירוע או לאפשר גלילה
+  const handleTouchStart = (e: GestureResponderEvent) => {
+    setTouchStartY(e.nativeEvent.pageY);
+  };
+  
+  const handleTouchMove = (e: GestureResponderEvent) => {
+    // מחשב את המרחק שהמשתמש הזיז את האצבע
+    const touchDelta = Math.abs(e.nativeEvent.pageY - touchStartY);
+    
+    // אם המשתמש זז יותר מ-10 פיקסלים, זו כנראה גלילה
+    if (touchDelta > 10 && !isScrolling) {
+      setIsScrolling(true);
+      // מעדכן את ה-scrollY
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ 
+          y: scrollY + (touchStartY - e.nativeEvent.pageY),
+          animated: false 
+        });
+      }
+    }
+  };
+  
+  const handleTouchEnd = () => {
+    setIsScrolling(false);
+  };
+  
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setScrollY(e.nativeEvent.contentOffset.y);
+  };
 
   useEffect(() => {
     if (visible) {
@@ -125,8 +202,8 @@ export function EditUserDialog({
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const users = await getAllUsers();
-      setExistingUsers(users.filter(u => u.id !== user.id));
+      const allUsers = await getAllUsers();
+      setExistingUsers(allUsers.filter(u => u.id !== user.id));
 
       const activeGroups = await getAllActiveGroups();
       const userGroupIds = userGroups.map(g => g.groupId);
@@ -138,24 +215,36 @@ export function EditUserDialog({
         wasSelected: userGroupIds.includes(group.id)
       }));
       setGroups(initialGroups);
-      setOriginalData({
+      
+      // Set initial form and original data based on the user prop
+      const initialEmail = user.email || '';
+      setFormData({
         name: user.name,
         phone: user.phone,
+        email: initialEmail,
         role: user.role,
         isActive: user.isActive
       });
+      setOriginalData({
+        name: user.name,
+        phone: user.phone,
+        email: initialEmail,
+        role: user.role,
+        isActive: user.isActive
+      });
+      
       if (user.paymentUnitId) {
         const paymentUnit = await getPaymentUnitById(user.paymentUnitId);
         if (paymentUnit) {
           setPaymentUnitActive(paymentUnit.isActive);
-          const otherPlayerId = paymentUnit.players.find(id => id !== user.id);
-          if (otherPlayerId) {
-            const otherPlayer = users.find(u => u.id === otherPlayerId);
+          const otherPlayerIdInUnit = paymentUnit.players.find(id => id !== user.id);
+          if (otherPlayerIdInUnit) {
+            const otherPlayer = allUsers.find(u => u.id === otherPlayerIdInUnit);
             if (otherPlayer) {
               setPaymentUnitDetails({
                 unitId: paymentUnit.id,
                 unitName: paymentUnit.name,
-                otherPlayerId,
+                otherPlayerId: otherPlayerIdInUnit,
                 otherPlayerName: otherPlayer.name,
                 isActive: paymentUnit.isActive
               });
@@ -173,21 +262,23 @@ export function EditUserDialog({
     }
   };
 
-  const handleChange = (field: keyof typeof formData, value: any) => {
+  const handleChange = (field: keyof typeof formData, value: string | boolean | UserRole) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (field === 'name') {
+    if (field === 'name' && typeof value === 'string') {
       if (value && value !== user.name && !validateName(value)) {
         setNameError('שם המשתמש כבר קיים במערכת');
       } else {
         setNameError('');
       }
-    }
-    if (field === 'phone') {
-      if (value && value !== user.phone && existingUsers.some(u => u.phone === value)) {
-        setPhoneError('מספר הטלפון כבר קיים במערכת');
+    } else if (field === 'email' && typeof value === 'string') {
+      if (value && !/^\S+@\S+\.\S+$/.test(value)) {
+        setEmailError('כתובת אימייל אינה תקינה');
       } else {
-        setPhoneError('');
+        setEmailError('');
       }
+    } else if (field === 'phone' && typeof value === 'string') {
+      // Add phone validation if needed
+      setPhoneError(''); // Placeholder
     }
   };
 
@@ -273,50 +364,152 @@ export function EditUserDialog({
   };
 
   const handleSave = async () => {
-    // אם יש pending שינוי במצב יחידת התשלום, נעדכן אותה תחילה
     if (pendingPaymentUnitToggle !== null) {
       await confirmPaymentUnitToggle();
     }
-    if (!hasChanges || nameError || phoneError) {
+    if (!hasChanges || nameError || phoneError || emailError) {
       return;
     }
-    if (!formData.name.trim()) {
-      setError('נדרש להזין שם משתמש');
-      return;
+
+    const updatedUserData: Partial<UserProfile> = {
+      name: formData.name.trim(),
+      phone: formData.phone.trim(),
+      role: formData.role,
+      isActive: formData.isActive,
+    };
+
+    if (formData.email.trim()) {
+      updatedUserData.email = formData.email.trim();
+    } else {
+      updatedUserData.email = null;
     }
-    if (formData.name !== user.name && !validateName(formData.name)) {
-      setError('שם המשתמש כבר קיים במערכת');
-      return;
-    }
-    if (formData.phone !== user.phone && phoneError) {
-      setError('מספר הטלפון כבר קיים במערכת');
-      return;
-    }
-    if (formData.isActive && groups.filter(g => g.isSelected).length === 0) {
-      setError('כדי שהמשתמש יהיה פעיל, יש לרשמו לפחות בקבוצה אחת');
-      return;
-    }
-    if (formData.name !== originalData.name && !showNameConfirm) {
-      setShowNameConfirm(true);
-      return;
-    }
-    if (formData.phone !== originalData.phone && !showPhoneConfirm) {
-      setShowPhoneConfirm(true);
-      return;
-    }
-    if (formData.role !== originalData.role && !showRoleConfirm) {
-      setShowRoleConfirm(true);
-      return;
-    }
+
     try {
       setLoading(true);
       setError(null);
-      await updateUser(user.id, {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        role: formData.role,
-        isActive: formData.isActive
-      });
+
+      // Handle email deletion - delete from Firebase Auth before updating Firestore
+      if (!formData.email.trim() && user.email && user.authUid) {
+        console.log(`User email is being removed. Clearing email and authUid from Firestore for: ${user.email}`);
+        try {
+          const deleteSuccess = await deleteAuthUserByEmail(user.email);
+          if (deleteSuccess) {
+            console.log(`Successfully cleared email and authUid from Firestore for: ${user.email}`);
+            // Also clear the authUid in Firestore - use deleteField() to remove the field
+            updatedUserData.authUid = deleteField() as any;
+            
+            // Show success message
+            setError('✅ האימייל נמחק מהמערכת בהצלחה! המשתמש לא יוכל עוד להתחבר עם האימייל הזה.');
+            
+            // Update Firestore and close dialog
+            await updateUser(user.id, updatedUserData);
+            
+            // Handle groups updates
+            for (const group of groups) {
+              if (
+                group.isSelected !== group.wasSelected ||
+                (group.isSelected && group.wasSelected &&
+                  group.isPermanent !== userGroups.find(g => g.groupId === group.groupId)?.isPermanent)
+              ) {
+                const currentGroup = await getGroupById(group.groupId);
+                if (!currentGroup) continue;
+                const updatedGroup = { ...currentGroup };
+                if (group.wasSelected) {
+                  updatedGroup.permanentPlayers = updatedGroup.permanentPlayers.filter(id => id !== user.id);
+                  updatedGroup.guestPlayers = updatedGroup.guestPlayers.filter(id => id !== user.id);
+    }
+                if (group.isSelected) {
+                  if (group.isPermanent) {
+                    updatedGroup.permanentPlayers = [...updatedGroup.permanentPlayers, user.id];
+                  } else {
+                    updatedGroup.guestPlayers = [...updatedGroup.guestPlayers, user.id];
+                  }
+                }
+                await updateGroup(group.groupId, updatedGroup);
+              }
+            }
+            
+            // Close dialog after showing success message for a moment
+            setTimeout(() => {
+              onSuccess();
+              onClose();
+            }, 2000);
+            
+            setLoading(false);
+            return; // Don't proceed with other updates
+          } else {
+            console.warn(`Failed to clear email and authUid from Firestore for ${user.email}.`);
+            setError('⚠️ שגיאה במחיקת האימייל. נסה שוב.');
+            setLoading(false);
+      return;
+    }
+        } catch (authDeletionError: any) {
+          console.error('Failed to clear email and authUid during email removal:', authDeletionError);
+          setError('⚠️ שגיאה במחיקת האימייל. נסה שוב.');
+          setLoading(false);
+      return;
+    }
+      }
+
+      // Check for email duplication if email is provided and changed
+      if (formData.email.trim() && formData.email.trim() !== user.email) {
+        const allUsers = await getAllUsers();
+        const emailExists = allUsers.some(
+          existingUser => existingUser.email?.toLowerCase() === formData.email.trim().toLowerCase() && existingUser.id !== user.id
+        );
+        if (emailExists) {
+          setError('כתובת האימייל שהוזנה כבר קיימת אצל משתמש אחר.');
+          setEmailError('כתובת האימייל שהוזנה כבר קיימת אצל משתמש אחר.'); // Set specific error for email field
+          setLoading(false);
+      return;
+    }
+      }
+
+      let authUidCreated: string | null = null;
+      // Logic for creating auth user if email is new and authUid is missing
+      if (formData.email.trim() && !user.authUid) {
+        console.log(`Attempting to create auth user for ${user.id} with email ${formData.email.trim()}`);
+        try {
+          authUidCreated = await createAuthUserAndUpdateFirestore(formData.email.trim(), user.id);
+          if (authUidCreated) {
+            console.log(`Auth user created successfully with authUid: ${authUidCreated}`);
+            // Remove email from updatedUserData since it was already updated by createAuthUserAndUpdateFirestore
+            delete updatedUserData.email;
+            // The user object prop might be stale here. 
+            // onSuccess should probably trigger a re-fetch of users in the parent component.
+            
+            // Show success message with logout warning
+            setError('✅ האימייל נוסף בהצלחה! המערכת תתנתק אוטומטית כדי לשמור על אבטחת המערכת. תוכל להתחבר מחדש כאדמין תוך כמה שניות.');
+            
+            // Close dialog after showing success message for a moment
+            setTimeout(() => {
+              onSuccess();
+              onClose();
+            }, 3000);
+            
+            setLoading(false);
+            return; // Don't proceed with other updates
+          } else {
+            // Handle case where authUidCreated is null (creation failed but didn't throw an unhandled error)
+            setError('שגיאה ביצירת חשבון משתמש להתחברות. האימייל נשמר, אך יש לטפל בקישור ידנית.');
+            // Optionally, do not proceed with other updates or allow partial save
+          }
+        } catch (authCreationError: any) {
+          console.error('Failed to create auth user during edit:', authCreationError);
+          // Check if it's the specific email-already-in-use error
+          if (authCreationError.message && authCreationError.message.includes('כבר קיים במערכת Authentication')) {
+            setError(authCreationError.message);
+            setEmailError('האימייל כבר קיים במערכת Authentication');
+          } else {
+            setError('שגיאה קריטית ביצירת חשבון משתמש. האימייל לא נשמר. נסה שוב או פנה לתמיכה.');
+          }
+          setLoading(false);
+          return; // Stop execution if auth creation fails critically
+        }
+      }
+
+      await updateUser(user.id, updatedUserData);
+      
       for (const group of groups) {
         if (
           group.isSelected !== group.wasSelected ||
@@ -347,6 +540,18 @@ export function EditUserDialog({
       setError('שמירת השינויים נכשלה');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const confirmInactiveStatus = () => {
+    setShowInactiveConfirmation(false);
+    
+    // מעדכן את כל הקבוצות למצב לא נבחר
+    setGroups(prev => prev.map(group => ({ ...group, isSelected: false })));
+    
+    // אם יש יחידת תשלום, מעדכן אותה ללא פעילה
+    if (paymentUnitDetails) {
+      setPaymentUnitActive(false);
     }
   };
 
@@ -438,10 +643,12 @@ export function EditUserDialog({
         <Dialog
           visible={showGroupRemoveConfirmation}
           title="אישור הסרה מקבוצה"
-          onClose={() => {
+          onConfirm={() => {}}
+          onCancel={() => {
             setShowGroupRemoveConfirmation(false);
             setGroupToRemove(null);
           }}
+          message=""
           confirmText=""
           cancelText=""
         >
@@ -480,20 +687,21 @@ export function EditUserDialog({
 
       <Dialog
         visible={visible}
-        onClose={onClose}
         title={`עריכת משתמש - ${user.name}`}
         confirmText="שמירה"
         cancelText="ביטול"
         onConfirm={handleSave}
         onCancel={onClose}
+        message=" "
+        confirmButtonProps={{
+          disabled: !hasChanges || !!nameError || !!phoneError || !!emailError || loading
+        }}
       >
-        {/* מיכל תוכן הדיאלוג – מוגדר בגובה קבוע (contentHeight) */}
-        <View style={[styles.contentContainer, { height: contentHeight }]}>
+        <View style={styles.contentContainer}>
           <ScrollView
             style={styles.scrollView}
-            contentContainerStyle={styles.scrollContainer}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled={true}
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={true}
           >
             {error && (
               <View style={styles.errorContainer}>
@@ -526,6 +734,20 @@ export function EditUserDialog({
                 />
                 {phoneError ? (
                   <Text style={styles.inlineErrorText}>{phoneError}</Text>
+                ) : null}
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>אימייל</Text>
+                <Input
+                  value={formData.email}
+                  onChangeText={(value) => handleChange('email', value)}
+                  placeholder="הכנס אימייל (אופציונלי)"
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  style={styles.inputField}
+                />
+                {emailError ? (
+                  <Text style={styles.inlineErrorText}>{emailError}</Text>
                 ) : null}
               </View>
               <View style={styles.field}>
@@ -611,7 +833,9 @@ export function EditUserDialog({
                 )}
               </View>
             )}
-            <View style={{ flex: 1 }} />
+            
+            {/* מרווח מטה כדי לאפשר ראות מלאה של תוכן האחרון בעת גלילה */}
+            <View style={{ height: 50 }} />
           </ScrollView>
         </View>
       </Dialog>
@@ -622,19 +846,16 @@ export function EditUserDialog({
 export default EditUserDialog;
 
 const styles = StyleSheet.create({
-  // מיכל תוכן הדיאלוג – גובה קבוע לפי contentHeight
   contentContainer: {
-    height: contentHeight,
     width: '100%',
-    flexDirection: 'column',
+    height: contentHeight,
   },
   scrollView: {
     flex: 1,
   },
-  scrollContainer: {
-    paddingBottom: 16,
+  scrollViewContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingVertical: 16,
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 0, 0, 0.1)',
@@ -650,6 +871,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+    width: '100%',
   },
   sectionTitle: {
     color: CASINO_COLORS.gold,
@@ -659,6 +881,7 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: 12,
+    width: '100%',
   },
   fieldLabel: {
     color: CASINO_COLORS.text,
@@ -724,6 +947,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
+    width: '100%',
+    marginBottom: 8,
   },
   groupInfo: {
     flexDirection: 'row-reverse',
@@ -741,8 +966,15 @@ const styles = StyleSheet.create({
   groupActionButton: {
     borderColor: CASINO_COLORS.gold,
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   groupActionText: {
     color: CASINO_COLORS.gold,
+    fontSize: 14,
   },
 });

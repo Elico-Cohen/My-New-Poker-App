@@ -29,12 +29,23 @@ export interface GameStatisticsResponse {
     totalMoney: number;
     groupName: string;
   }[];
+  
+  // השדות החדשים שנוסיף לסטטיסטיקה
+  totalGames: number;                // סה"כ מספר משחקים
+  activePlayers: number;             // מספר שחקנים פעילים
+  totalRebuys: number;               // מספר הריבאיים הכולל
+  totalMoney: number;                // סה"כ קניות מצטברות
+  averageRebuysPerGame: number;      // ממוצע ריבאיים למשחק
+  averageMoneyPerGame: number;       // ממוצע קניות למשחק
+  averageMoneyPerPlayer: number;     // ממוצע קניות לשחקן
 }
 
 /**
  * חישוב סטטיסטיקות חודשיות
  */
 const calculateMonthlyStats = (games: Game[]): { month: string; games: number; money: number; avgPlayers: number }[] => {
+  console.log(`calculateMonthlyStats: מחשב סטטיסטיקות חודשיות ל-${games.length} משחקים`);
+  
   const monthlyStatsMap = new Map<string, { 
     games: number; 
     money: number; 
@@ -63,17 +74,26 @@ const calculateMonthlyStats = (games: Game[]): { month: string; games: number; m
     
     // Calculate money
     let gameMoney = 0;
-    game.players?.forEach(player => {
-      const buyInCount = (player as any).buyInCount || 0;
-      const rebuyCount = (player as any).rebuyCount || 0;
-      
-      const buyInTotal = buyInCount * 
-        ((game.buyInSnapshot && game.buyInSnapshot.amount) || 0);
-      const rebuyTotal = rebuyCount * 
-        ((game.rebuySnapshot && game.rebuySnapshot.amount) || 0);
-      
-      gameMoney += buyInTotal + rebuyTotal;
-    });
+    
+    if (game.players && game.players.length > 0) {
+      game.players.forEach(player => {
+        // שימוש ישיר בשדות buyInCount ו-rebuyCount מהאובייקט PlayerInGame
+        const buyInCount = player.buyInCount || 0;
+        const rebuyCount = player.rebuyCount || 0;
+        
+        // בדיקה שיש buyInSnapshot ו-rebuySnapshot
+        if (game.buyInSnapshot && game.buyInSnapshot.amount && game.rebuySnapshot && game.rebuySnapshot.amount) {
+          const buyInTotal = buyInCount * game.buyInSnapshot.amount;
+          const rebuyTotal = rebuyCount * game.rebuySnapshot.amount;
+          
+          gameMoney += buyInTotal + rebuyTotal;
+        } else {
+          console.warn(`calculateMonthlyStats: משחק ${game.id} חסרים נתוני buyInSnapshot או rebuySnapshot`);
+        }
+      });
+    } else {
+      console.warn(`calculateMonthlyStats: משחק ${game.id} אין שחקנים או מערך ריק`);
+    }
     
     // Update monthly money and players
     existingMonthStats.money += gameMoney;
@@ -82,7 +102,7 @@ const calculateMonthlyStats = (games: Game[]): { month: string; games: number; m
   });
   
   // Convert map to array for monthly stats
-  return Array.from(monthlyStatsMap.entries()).map(([month, stats]) => ({
+  const result = Array.from(monthlyStatsMap.entries()).map(([month, stats]) => ({
     month,
     games: stats.games,
     money: stats.money,
@@ -95,6 +115,9 @@ const calculateMonthlyStats = (games: Game[]): { month: string; games: number; m
     if (aYear !== bYear) return aYear - bYear;
     return aMonth - bMonth;
   });
+  
+  console.log(`calculateMonthlyStats: נוצרו נתונים ל-${result.length} חודשים`);
+  return result;
 };
 
 /**
@@ -334,7 +357,8 @@ const getTopGamesByMoney = (
     
     return {
       id: game.id,
-      date: game.date ? formatShortDate(game.date) : 'תאריך לא ידוע',
+      date: (game as any).gameDate ? formatShortDate((game as any).gameDate) : 
+            (game.date ? formatShortDate(game.date) : 'תאריך לא ידוע'),
       players: game.players?.length || 0,
       totalMoney,
       groupName: game.groupNameSnapshot || 'קבוצה לא ידועה'
@@ -344,6 +368,100 @@ const getTopGamesByMoney = (
   return gamesWithMoney
     .sort((a, b) => b.totalMoney - a.totalMoney)
     .slice(0, limit);
+};
+
+/**
+ * מחשב את מספר השחקנים הפעילים (הייחודיים) בכל המשחקים
+ */
+const calculateActivePlayers = (games: Game[]): number => {
+  // שמירת מזהי השחקנים הייחודיים בסט
+  const uniquePlayerIds = new Set<string>();
+  
+  games.forEach(game => {
+    game.players?.forEach(player => {
+      if (player.userId) {
+        uniquePlayerIds.add(player.userId);
+      } else if (player.id) {
+        uniquePlayerIds.add(player.id);
+      }
+    });
+  });
+  
+  return uniquePlayerIds.size;
+};
+
+/**
+ * מחשב את מספר הריבאיים הכולל בכל המשחקים
+ */
+const calculateTotalRebuys = (games: Game[]): number => {
+  let totalRebuys = 0;
+  
+  games.forEach(game => {
+    game.players?.forEach(player => {
+      const rebuyCount = player.rebuyCount || 0;
+      totalRebuys += rebuyCount;
+    });
+  });
+  
+  return totalRebuys;
+};
+
+/**
+ * מחשב את ממוצע הריבאיים למשחק
+ */
+const calculateAverageRebuysPerGame = (games: Game[]): number => {
+  const totalRebuys = calculateTotalRebuys(games);
+  return games.length > 0 ? totalRebuys / games.length : 0;
+};
+
+/**
+ * מחשב את סך כל הקניות (באי-אין + ריבאיים) בכל המשחקים
+ */
+const calculateTotalMoney = (games: Game[]): number => {
+  let totalMoney = 0;
+  
+  games.forEach(game => {
+    if (game.players && game.players.length > 0) {
+      game.players.forEach(player => {
+        const buyInCount = player.buyInCount || 0;
+        const rebuyCount = player.rebuyCount || 0;
+        
+        if (game.buyInSnapshot?.amount && game.rebuySnapshot?.amount) {
+          const buyInTotal = buyInCount * game.buyInSnapshot.amount;
+          const rebuyTotal = rebuyCount * game.rebuySnapshot.amount;
+          
+          totalMoney += buyInTotal + rebuyTotal;
+        }
+      });
+    }
+  });
+  
+  return totalMoney;
+};
+
+/**
+ * מחשב את ממוצע הקניות למשחק
+ */
+const calculateAverageMoneyPerGame = (games: Game[]): number => {
+  const totalMoney = calculateTotalMoney(games);
+  return games.length > 0 ? totalMoney / games.length : 0;
+};
+
+/**
+ * מחשב את ממוצע הקניות לשחקן
+ */
+const calculateAverageMoneyPerPlayer = (games: Game[]): number => {
+  const totalMoney = calculateTotalMoney(games);
+  
+  // במקום להשתמש במספר השחקנים הייחודיים, נחשב את סך כל המשתתפים
+  // (סה"כ השתתפויות של שחקנים בכל המשחקים)
+  let totalParticipants = 0;
+  games.forEach(game => {
+    // מספר השחקנים במשחק זה (כל שחקן נחשב כמשתתף)
+    totalParticipants += game.players?.length || 0;
+  });
+  
+  return totalParticipants > 0 ? totalMoney / totalParticipants : 0;
 };
 
 /**
@@ -368,6 +486,8 @@ export const getGameStatistics = async (
     
     // קבלת נתונים מהמאגר המרכזי במקום מפיירבייס ישירות
     const allGames = store.getGames();
+    const gamesCount = allGames.length;
+    console.log(`GameStatistics: מצאתי ${gamesCount} משחקים במאגר המרכזי`);
     
     // סינון משחקים לפי הקריטריונים שהועברו בפילטר
     // בברירת מחדל נשתמש בסטטוס 'completed' בלבד
@@ -380,7 +500,10 @@ export const getGameStatistics = async (
     
     console.log('GameStatistics: מסנן משחקים עם פילטר:', gameFilter);
     const filteredGames = filterGames(allGames, gameFilter);
+    console.log(`GameStatistics: לאחר סינון נשארו ${filteredGames.length} משחקים`);
+    
     const allGroups = store.getGroups();
+    console.log(`GameStatistics: מצאתי ${allGroups.length} קבוצות במאגר המרכזי`);
     
     console.log(`GameStatistics: מעבד ${filteredGames.length} משחקים עבור סטטיסטיקת משחקים`);
     
@@ -392,9 +515,11 @@ export const getGameStatistics = async (
     
     // Calculate monthly statistics
     const monthlyStats = calculateMonthlyStats(filteredGames);
+    console.log(`GameStatistics: חושבו ${monthlyStats.length} חודשים של נתונים`);
     
     // Calculate group statistics
     const groupStats = calculateGroupStats(filteredGames, allGroups);
+    console.log(`GameStatistics: חושבו נתוני ${groupStats?.length || 0} קבוצות`);
     
     // Calculate player distribution
     const playerDistribution = calculatePlayerDistribution(filteredGames);
@@ -413,6 +538,7 @@ export const getGameStatistics = async (
     
     // Calculate average players per game
     const averagePlayersPerGame = calculateAveragePlayersPerGame(filteredGames);
+    console.log(`GameStatistics: ממוצע שחקנים למשחק: ${averagePlayersPerGame}`);
     
     // Get top games by money
     const topGames = getTopGamesByMoney(filteredGames, allGroups, 5);
@@ -426,7 +552,16 @@ export const getGameStatistics = async (
       rebuyDistribution,
       investmentDistribution,
       averagePlayersPerGame,
-      topGames
+      topGames,
+      
+      // השדות החדשים שנוסיף לסטטיסטיקה
+      totalGames: filteredGames.length,
+      activePlayers: calculateActivePlayers(filteredGames),
+      totalRebuys: calculateTotalRebuys(filteredGames),
+      totalMoney: calculateTotalMoney(filteredGames),
+      averageRebuysPerGame: calculateAverageRebuysPerGame(filteredGames),
+      averageMoneyPerGame: calculateAverageMoneyPerGame(filteredGames),
+      averageMoneyPerPlayer: calculateAverageMoneyPerPlayer(filteredGames)
     };
     
     // Cache results
@@ -435,10 +570,18 @@ export const getGameStatistics = async (
       timestamp: Date.now()
     });
     
-    console.log('GameStatistics: החזרת נתונים ואחסון במטמון');
+    console.log('GameStatistics: החזרת נתונים ואחסון במטמון', {
+      monthlyStats: result.monthlyStats?.length || 0,
+      groupStats: result.groupStats?.length || 0,
+      playerDistribution: result.playerDistribution?.length || 0,
+      gameByDayOfWeek: result.gameByDayOfWeek?.length || 0,
+      topGames: result.topGames?.length || 0,
+      averagePlayersPerGame: result.averagePlayersPerGame || 0
+    });
     return result;
   } catch (error) {
     console.error('שגיאה בחישוב סטטיסטיקות משחקים:', error);
+    console.error('שגיאה מפורטת:', JSON.stringify(error));
     throw error;
   }
 };

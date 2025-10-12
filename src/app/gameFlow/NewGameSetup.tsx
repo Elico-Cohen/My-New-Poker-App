@@ -4,7 +4,7 @@ export const unstable_settings = {
   headerShown: false,
 };
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Dimensions,
   BackHandler,
+  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
@@ -29,6 +30,12 @@ import { UserProfile } from '@/models/UserProfile';
 import AddExternalPlayerDialog from '@/components/dashboard/AddExternalPlayerDialog';
 import { useGameContext } from '@/contexts/GameContext';
 import { Group, ChipsConfig } from '@/models/Group';
+import { useAuth } from '@/contexts/AuthContext';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import { DatePickerDialog } from '@/components/common/DatePickerDialog';
+import { GameDate } from '@/models/Game';
+import { saveOrUpdateActiveGame } from '@/services/gameSnapshot';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Player = {
   id: string;
@@ -41,7 +48,8 @@ const windowHeight = Dimensions.get('window').height;
 
 export default function NewGameSetup() {
   const router = useRouter();
-  const { setGameData } = useGameContext();
+  const { setGameData, saveActiveGame, clearActiveGame } = useGameContext();
+  const { user } = useAuth();
 
   const now = new Date();
   const [selectedDate, setSelectedDate] = useState({
@@ -61,8 +69,10 @@ export default function NewGameSetup() {
   const [selectedExternalPlayerIds, setSelectedExternalPlayerIds] = useState<string[]>([]);
   const [showExternalDialog, setShowExternalDialog] = useState(false);
   const [showNewPlayerDialog, setShowNewPlayerDialog] = useState(false);
-  const [newPlayerData, setNewPlayerData] = useState<NewPlayerData>({ name: '', phone: '' });
+  const [newPlayerData, setNewPlayerData] = useState<NewPlayerData>({ name: '', phone: '', email: '' });
   const [newPlayerNameError, setNewPlayerNameError] = useState<string | null>(null);
+  const [newPlayerEmailError, setNewPlayerEmailError] = useState<string | null>(null);
+  const [newPlayerGeneralError, setNewPlayerGeneralError] = useState<string | null>(null);
   const [logDialogVisible, setLogDialogVisible] = useState(false);
   const [rebuyLogs, setRebuyLogs] = useState<any[]>([]);
 
@@ -233,51 +243,64 @@ export default function NewGameSetup() {
   const totalSelected = selectedGroupPlayerIds.length + selectedExternalPlayerIds.length;
   const canStartGame = totalSelected >= 5 && totalSelected <= 13;
 
-  // Added safety checks at the start of the function
   const handleNewPlayerSubmit = async () => {
-    // ★★★ Don't proceed if validation fails ★★★
-    if (!newPlayerData.name.trim() || newPlayerNameError !== null) {
+    if (!newPlayerData.name.trim()) {
+      setNewPlayerNameError('נדרש להזין שם שחקן');
       return;
     }
     
+    if (newPlayerData.email && newPlayerData.email.trim() && !/\S+@\S+\.\S+/.test(newPlayerData.email.trim())) {
+      setNewPlayerEmailError('כתובת אימייל אינה תקינה');
+      return;
+    }
+    
+    if (newPlayerNameError || newPlayerEmailError) return;
+    
     try {
-      if (!newPlayerData.name.trim()) {
-        setNewPlayerNameError('יש להזין שם שחקן');
-        return;
+      const newUserId = await createNewPlayerAndAddToGroup(newPlayerData, selectedGroupId); 
+      
+      // Check if email was provided to show appropriate message
+      if (newPlayerData.email && newPlayerData.email.trim()) {
+        setNewPlayerGeneralError('✅ השחקן נוצר בהצלחה עם אימייל! המערכת תתנתק אוטומטית כדי לשמור על אבטחת המערכת. תוכל להתחבר מחדש כאדמין תוך כמה שניות.');
+        
+        // Close dialog after showing success message
+        setTimeout(() => {
+          setShowNewPlayerDialog(false);
+          setNewPlayerData({ name: '', phone: '', email: '' });
+          setNewPlayerNameError(null);
+          setNewPlayerEmailError(null);
+          setNewPlayerGeneralError(null);
+        }, 3000);
+      } else {
+        // Regular success for player without email
+        setShowNewPlayerDialog(false);
+        setNewPlayerData({ name: '', phone: '', email: '' });
+        setNewPlayerNameError(null);
+        setNewPlayerEmailError(null);
+        setNewPlayerGeneralError(null);
       }
-
-      // Explicitly check if name already exists
-      const users = await getAllUsers();
-      const nameExists = users.some(user => 
-        user.name.toLowerCase() === newPlayerData.name.trim().toLowerCase()
-      );
       
-      if (nameExists) {
-        setNewPlayerNameError('שם זה כבר קיים');
-        return;
-      }
-
-      const newUserId = await createNewPlayerAndAddToGroup(
-        newPlayerData, 
-        selectedGroupId
-      );
+      await refreshGroupPlayers(); 
+      await loadExternalPlayers(); 
       
-      await refreshGroupPlayers();
-      await loadExternalPlayers();
-      
-      setSelectedGroupPlayerIds((prev) => [...prev, newUserId]);
-      setShowNewPlayerDialog(false);
-      setNewPlayerData({ name: '', phone: '' });
-      setNewPlayerNameError(null);
     } catch (error: any) {
-      console.error('Failed to create new player:', error);
-      setNewPlayerNameError(error.message || 'יצירת השחקן נכשלה');
+      console.error('Error creating new player in NewGameSetup:', error);
+      if (error.message && error.message.toLowerCase().includes('שם')) {
+        setNewPlayerNameError(error.message);
+      } else {
+        setNewPlayerGeneralError(error.message || 'יצירת שחקן חדש נכשלה. נסה שנית.');
+      }
     }
   };
 
   const startGame = async () => {
     if (canStartGame && selectedGroupId) {
       try {
+        console.log('🎮 === STARTING NEW GAME === 🎮');
+        console.log('Selected group ID:', selectedGroupId);
+        console.log('Selected date:', selectedDate);
+        console.log('Total players selected:', [...selectedGroupPlayerIds, ...selectedExternalPlayerIds].length);
+        
         // Fetch the complete group data to access buyIn and rebuy
         const selectedGroup = await getGroupById(selectedGroupId);
         
@@ -314,19 +337,26 @@ export default function NewGameSetup() {
           openGames: [],
           payments: [],
           useRoundingRule: selectedGroup.useRoundingRule,
-          roundingRulePercentage: selectedGroup.roundingRulePercentage,
+          roundingRulePercentage: selectedGroup.roundingRulePercentage || 0,
           totalWins: 0,
           totalLosses: 0,
           difference: 0,
           openGamesCount: 0,
+          status: 'active' as const,
         };
 
+        console.log('📝 Setting game data in GameContext...');
+        console.log("Game Data to be saved:", JSON.stringify(gameData, null, 2));
+        
+        // עדכון הקונטקסט - השמירה האוטומטית תטפל בשמירה ב-Firestore
         setGameData(gameData);
-        console.log("Game Data saved in container:", JSON.stringify(gameData, null, 2));
-
+        
+        console.log('✅ Game data set in context - auto-save will handle Firestore sync');
+        console.log('🎯 Navigating to GameManagement...');
         router.push('/gameFlow/GameManagement');
+        console.log('🎮 === NEW GAME SETUP COMPLETE === 🎮');
       } catch (error) {
-        console.error("Error starting game:", error);
+        console.error("❌ Error starting game:", error);
       }
     }
   };
@@ -344,7 +374,12 @@ export default function NewGameSetup() {
         <Text variant="h4" style={styles.headerTitle}>
           התחל משחק חדש
         </Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity 
+          style={styles.homeButton}
+          onPress={() => router.push('/(tabs)/home2')}
+        >
+          <Icon name="home" size="medium" color="#FFD700" />
+        </TouchableOpacity>
       </View>
 
       {/* Settings Area */}
@@ -476,10 +511,7 @@ export default function NewGameSetup() {
         title="יציאה מהמשחק"
         confirmText="צא"
         cancelText="המשך משחק"
-        onConfirm={() => {
-          setShowExitDialog(false);
-          router.push('/(tabs)/home');
-        }}
+        onConfirm={async () => {          setShowExitDialog(false);          await clearActiveGame();          router.push('/(tabs)/home2');        }}
         onCancel={() => setShowExitDialog(false)}
       >
         <Text style={{ color: '#c41e3a', textAlign: 'center', marginBottom: 16 }}>
@@ -517,70 +549,66 @@ export default function NewGameSetup() {
         <Dialog
           visible={showNewPlayerDialog}
           title="הוסף שחקן חדש"
-          onClose={() => {
+          onDismiss={() => {
             setShowNewPlayerDialog(false);
-            setNewPlayerData({ name: '', phone: '' });
+            setNewPlayerData({ name: '', phone: '', email: '' });
             setNewPlayerNameError(null);
+            setNewPlayerEmailError(null);
+            setNewPlayerGeneralError(null);
           }}
-          confirmText="אישור"
-          cancelText="ביטול"
-          onConfirm={() => {
-            // Only execute handleNewPlayerSubmit if there's no error and name is not empty
-            if (newPlayerData.name.trim() && !newPlayerNameError) {
-              handleNewPlayerSubmit();
-            }
-            // When conditions fail, do nothing - this prevents both the submission and dialog closing
-          }}
-          onCancel={() => {
-            setShowNewPlayerDialog(false);
-            setNewPlayerData({ name: '', phone: '' });
-            setNewPlayerNameError(null);
-          }}
-          // Disable the confirm button when there's an error
-          confirmButtonProps={{
-            disabled: Boolean(!newPlayerData.name.trim() || newPlayerNameError !== null)
-          }}
+          actions={[
+            {
+              text: "ביטול",
+              onPress: () => {
+                setShowNewPlayerDialog(false);
+                setNewPlayerData({ name: '', phone: '', email: '' });
+                setNewPlayerNameError(null);
+                setNewPlayerEmailError(null);
+                setNewPlayerGeneralError(null);
+              },
+              style: "cancel",
+            },
+            {
+              text: "הוסף",
+              onPress: handleNewPlayerSubmit,
+              style: "confirm",
+            },
+          ]}
         >
-          <View style={styles.newPlayerContainer}>
-            <Text variant="bodyMedium" style={styles.inputLabel}>
-              שם השחקן
-            </Text>
+          <View style={{ padding: 16, gap: 12 }}>
             <Input
+              label="שם מלא"
               value={newPlayerData.name}
               onChangeText={(text) => {
                 setNewPlayerData((prev) => ({ ...prev, name: text }));
                 if (!text.trim()) {
-                  setNewPlayerNameError('יש להזין שם שחקן');
-                  return;
+                  setNewPlayerNameError('שם הוא שדה חובה');
+                } else {
+                  setNewPlayerNameError(null);
                 }
-                getAllUsers().then((users) => {
-                  const exists = users.some(
-                    (user) =>
-                      user.name.toLowerCase() === text.trim().toLowerCase()
-                  );
-                  setNewPlayerNameError(exists ? 'שם זה כבר קיים' : null);
-                });
               }}
-              placeholder="הזן שם שחקן"
-              style={styles.fixedInput}
+              placeholder="הזן שם מלא"
+              error={newPlayerNameError}
             />
-            {newPlayerNameError && (
-              <Text variant="bodySmall" style={styles.errorText}>
-                {newPlayerNameError}
-              </Text>
-            )}
-            <Text variant="bodyMedium" style={styles.inputLabel}>
-              טלפון (אופציונלי)
-            </Text>
             <Input
+              label="טלפון (אופציונלי)"
               value={newPlayerData.phone}
-              onChangeText={(text) =>
-                setNewPlayerData((prev) => ({ ...prev, phone: text }))
-              }
-              placeholder="הזן טלפון"
+              onChangeText={(text) => setNewPlayerData((prev) => ({ ...prev, phone: text }))}
+              placeholder="הזן מספר טלפון"
               keyboardType="phone-pad"
-              style={styles.fixedInput}
             />
+            <Input
+              label="אימייל (אופציונלי)"
+              value={newPlayerData.email || ''}
+              onChangeText={(text) => setNewPlayerData((prev) => ({ ...prev, email: text }))}
+              placeholder="הזן כתובת אימייל"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={newPlayerEmailError}
+            />
+            {newPlayerGeneralError && (
+              <Text style={{ color: 'red', textAlign: 'right', marginBottom: 8 }}>{newPlayerGeneralError}</Text>
+            )}
           </View>
         </Dialog>
       )}
@@ -639,6 +667,14 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     textAlign: 'center',
     fontSize: 24,
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   settingsArea: {
     backgroundColor: '#1C2C2E',
@@ -754,31 +790,6 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     marginBottom: 8,
     textAlign: 'right',
-  },
-  newPlayerContainer: {
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  inputLabel: {
-    color: '#FFD700',
-    marginBottom: 8,
-    textAlign: 'right',
-  },
-  fixedInput: {
-    width: '100%',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#FFD700',
-    borderRadius: 4,
-    padding: 8,
-    color: '#FFD700',
-    textAlign: 'right',
-  },
-  errorText: {
-    color: '#ff4444',
-    textAlign: 'right',
-    marginBottom: 8,
   },
   externalButtonsContainer: {
     marginTop: 16,

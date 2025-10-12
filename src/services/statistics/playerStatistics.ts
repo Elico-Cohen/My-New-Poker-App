@@ -11,6 +11,11 @@ import {
 import { formatGameDate, fetchAllGames, filterGames } from '../statistics/statisticsService';
 import { store } from '@/store/AppStore';
 
+console.log('playerStatistics: מנקה מטמון סטטיסטיקות כדי להבטיח שהשינויים יכנסו לתוקף');
+
+// ביטול הקריאה ל-clearStatsCache כדי למנוע Require cycle
+console.log('playerStatistics: initializing module');
+
 /**
  * Calculate statistics for a specific player
  */
@@ -78,7 +83,7 @@ export const getPlayerStatistics = async (
         if (!playerStats.bestGame || finalResult > playerStats.bestGame.profit) {
           playerStats.bestGame = {
             gameId: game.id,
-            date: formatGameDate(game.date),
+            date: formatGameDate((game as any).gameDate || game.date),
             profit: finalResult
           };
         }
@@ -89,7 +94,7 @@ export const getPlayerStatistics = async (
         if (!playerStats.worstGame || finalResult < playerStats.worstGame.loss) {
           playerStats.worstGame = {
             gameId: game.id,
-            date: formatGameDate(game.date),
+            date: formatGameDate((game as any).gameDate || game.date),
             loss: finalResult
           };
         }
@@ -122,39 +127,45 @@ export const getWinnersLosersStatistics = async (
 ): Promise<WinnersLosersStats> => {
   try {
     console.log('PlayerStatistics: מביא נתוני מנצחים ומפסידים מהמאגר המרכזי');
-    // קבלת נתונים מהמאגר המרכזי במקום מפיירבייס ישירות
     const allGames = store.getGames();
     const filteredGames = filterGames(allGames, filter);
     const allUsers = store.getUsers();
     
-    console.log(`PlayerStatistics: מעבד ${filteredGames.length} משחקים עבור סטטיסטיקת מנצחים/מפסידים`);
+    console.log(`PlayerStatistics: מעבד ${filteredGames.length} משחקים עבור סטטיסטת מנצחים/מפסידים`);
     
-    // Maps to track accumulated stats for each player
-    const playerWinningsMap = new Map<string, {
+    // קבלת השחקנים הקבועים של הקבוצה אם יש סינון לפי קבוצה
+    let permanentPlayersInGroup: Set<string> | null = null;
+    if (filter.groupId && filter.groupId !== 'all') {
+      const group = store.getGroup(filter.groupId);
+      if (group && group.permanentPlayers) {
+        permanentPlayersInGroup = new Set(group.permanentPlayers);
+        console.log(`PlayerStatistics: מסנן לפי קבוצה ${group.name}, שחקנים קבועים: ${group.permanentPlayers.length}`);
+      }
+    }
+    
+    // מפה לשמירת כל הנתונים של כל שחקן
+    const playerStatsMap = new Map<string, {
       playerId: string;
       playerName: string;
-      netProfit: number;
       gamesPlayed: number;
-      winsCount: number;
+      gamesWon: number;
+      bestSingleGameProfit: number;
+      bestSingleGameId: string;
+      bestSingleGameDate: string;
+      cumulativeProfit: number;
+      winRate: number;
     }>();
     
-    const playerLossesMap = new Map<string, {
-      playerId: string;
-      playerName: string;
-      netLoss: number;
-      gamesPlayed: number;
-      lossesCount: number;
-    }>();
-    
-    // Track biggest single game win/loss
-    let biggestWin = { playerId: '', playerName: '', gameId: '', date: '', amount: 0 };
-    let biggestLoss = { playerId: '', playerName: '', gameId: '', date: '', amount: 0 };
-    
-    // Process games
+    // עיבוד המשחקים
     filteredGames.forEach(game => {
       game.players?.forEach(player => {
         const playerId = player.userId || player.id;
         if (!playerId) return;
+        
+        // אם יש סינון לפי קבוצה, כלול רק שחקנים קבועים
+        if (permanentPlayersInGroup && !permanentPlayersInGroup.has(playerId)) {
+          return; // דלג על שחקן שאינו קבוע בקבוצה
+        }
         
         const playerName = player.name || 
           allUsers.find(u => u.id === playerId)?.name || 
@@ -162,95 +173,81 @@ export const getWinnersLosersStatistics = async (
         
         const finalResult = player.finalResultMoney || 0;
         
-        // Update player in appropriate map
+        // יצירת או עדכון נתוני השחקן
+        let playerStats = playerStatsMap.get(playerId);
+        if (!playerStats) {
+          playerStats = {
+            playerId,
+            playerName,
+            gamesPlayed: 0,
+            gamesWon: 0,
+            bestSingleGameProfit: -Infinity,
+            bestSingleGameId: '',
+            bestSingleGameDate: '',
+            cumulativeProfit: 0,
+            winRate: 0
+          };
+          playerStatsMap.set(playerId, playerStats);
+        }
+        
+        // עדכון הנתונים
+        playerStats.gamesPlayed++;
+        playerStats.cumulativeProfit += finalResult;
+        
         if (finalResult > 0) {
-          // Handle winners
-          let playerWinnings = playerWinningsMap.get(playerId);
-          if (!playerWinnings) {
-            playerWinnings = { 
-              playerId, 
-              playerName, 
-              netProfit: 0, 
-              gamesPlayed: 0,
-              winsCount: 0
-            };
-            playerWinningsMap.set(playerId, playerWinnings);
-          }
-          
-          playerWinnings.netProfit += finalResult;
-          playerWinnings.gamesPlayed++;
-          playerWinnings.winsCount++;
-          
-          // Check if this is the biggest win
-          if (finalResult > biggestWin.amount) {
-            biggestWin = {
-              playerId,
-              playerName,
-              gameId: game.id,
-              date: formatGameDate(game.date),
-              amount: finalResult
-            };
-          }
-        } else if (finalResult < 0) {
-          // Handle losers
-          let playerLosses = playerLossesMap.get(playerId);
-          if (!playerLosses) {
-            playerLosses = { 
-              playerId, 
-              playerName, 
-              netLoss: 0, 
-              gamesPlayed: 0,
-              lossesCount: 0
-            };
-            playerLossesMap.set(playerId, playerLosses);
-          }
-          
-          playerLosses.netLoss += Math.abs(finalResult);
-          playerLosses.gamesPlayed++;
-          playerLosses.lossesCount++;
-          
-          // Check if this is the biggest loss
-          if (Math.abs(finalResult) > biggestLoss.amount) {
-            biggestLoss = {
-              playerId,
-              playerName,
-              gameId: game.id,
-              date: formatGameDate(game.date),
-              amount: Math.abs(finalResult)
-            };
+          playerStats.gamesWon++;
+          if (finalResult > playerStats.bestSingleGameProfit) {
+            playerStats.bestSingleGameProfit = finalResult;
+            playerStats.bestSingleGameId = game.id;
+            playerStats.bestSingleGameDate = formatGameDate(game.date);
           }
         }
+        else if (finalResult < 0) {
+          if (playerStats.bestSingleGameProfit === -Infinity || finalResult > playerStats.bestSingleGameProfit) {
+            playerStats.bestSingleGameProfit = finalResult;
+            playerStats.bestSingleGameId = game.id;
+            playerStats.bestSingleGameDate = formatGameDate(game.date);
+          }
+        }
+        else {
+          if (playerStats.bestSingleGameProfit === -Infinity || 0 > playerStats.bestSingleGameProfit) {
+            playerStats.bestSingleGameProfit = 0;
+            playerStats.bestSingleGameId = game.id;
+            playerStats.bestSingleGameDate = formatGameDate(game.date);
+          }
+        }
+        
+        // חישוב אחוז הצלחה - מתוך המשחקים שהשחקן שיחק
+        playerStats.winRate = (playerStats.gamesWon / playerStats.gamesPlayed) * 100;
       });
     });
     
-    // Sort and limit winners and losers
-    const topWinners = Array.from(playerWinningsMap.values())
-      .map(player => ({
-        playerId: player.playerId,
-        playerName: player.playerName,
-        netProfit: player.netProfit,
-        winRate: player.gamesPlayed > 0 ? 
-          (player.winsCount / player.gamesPlayed) * 100 : 0
-      }))
-      .sort((a, b) => b.netProfit - a.netProfit)
-      .slice(0, limit);
+    // המרת המפה לרשימות ממוינות
+    const allPlayers = Array.from(playerStatsMap.values());
     
-    const topLosers = Array.from(playerLossesMap.values())
-      .map(player => ({
-        playerId: player.playerId,
-        playerName: player.playerName,
-        netLoss: player.netLoss,
-        lossRate: player.gamesPlayed > 0 ? 
-          (player.lossesCount / player.gamesPlayed) * 100 : 0
-      }))
-      .sort((a, b) => b.netLoss - a.netLoss)
-      .slice(0, limit);
+    // מיון לפי רווח במשחק בודד
+    const bestSingleGamePlayers = [...allPlayers]
+      .sort((a, b) => b.bestSingleGameProfit - a.bestSingleGameProfit);
+    
+    // מיון לפי רווח מצטבר
+    const bestCumulativePlayers = [...allPlayers]
+      .sort((a, b) => b.cumulativeProfit - a.cumulativeProfit);
+    
+    // מיון לפי מספר משחקים ברווח
+    const mostWinningGamesPlayers = [...allPlayers]
+      .sort((a, b) => b.gamesWon - a.gamesWon);
+    
+    // מיון לפי אחוז משחקים ברווח
+    const bestWinRatePlayers = [...allPlayers]
+      .sort((a, b) => b.winRate - a.winRate);
     
     return {
-      topWinners,
-      topLosers,
-      biggestWin,
-      biggestLoss
+      bestSingleGamePlayers,
+      bestCumulativePlayers,
+      mostWinningGamesPlayers,
+      bestWinRatePlayers,
+      totalPlayers: allPlayers.length,
+      totalGames: filteredGames.length
     };
   } catch (error) {
     console.error('Error getting winners/losers statistics:', error);
@@ -265,11 +262,101 @@ export const getParticipationStatistics = async (
   filter: StatisticsFilter = { timeFilter: 'all' }
 ): Promise<ParticipationStats> => {
   try {
-    const allGames = store.getGames();
-    const filteredGames = filterGames(allGames, filter);
-    const allUsers = store.getUsers();
+    console.log('playerStatistics: התחלת חישוב סטטיסטיקות השתתפות');
+    console.log('playerStatistics: פילטר שהתקבל:', JSON.stringify(filter));
+    console.log('playerStatistics: ערכי פילטר ספציפיים:', {
+      timeFilter: filter.timeFilter,
+      groupId: filter.groupId,
+      statuses: filter.statuses
+    });
     
-    // Maps to track player participation
+    console.log('playerStatistics: מביא משחקים מהמאגר המרכזי');
+    const allGames = store.getGames();
+    console.log(`playerStatistics: התקבלו ${allGames.length} משחקים מהמאגר המרכזי`);
+    
+    // בדיקה מהירה של הנתונים שהתקבלו
+    if (allGames.length === 0) {
+      console.error('playerStatistics: לא התקבלו משחקים מהמאגר המרכזי');
+      return {
+        playerParticipation: [],
+        mostActivePlayerCount: 0,
+        leastActivePlayerCount: 0
+      };
+    }
+    
+    console.log('playerStatistics: מפעיל סינון משחקים עם הפילטרים:', {
+      timeFilter: filter.timeFilter,
+      groupId: filter.groupId ? `${filter.groupId} (יסנן רק משחקים של הקבוצה הזו)` : 'ללא סינון קבוצה',
+      statuses: filter.statuses ? filter.statuses.join(',') : 'ברירת מחדל'
+    });
+    
+    // ודא שפילטר עם ערכים תקינים מועבר לפונקציית filterGames
+    const filterToApply: StatisticsFilter = {
+      ...filter,
+      // אם לא סופק timeFilter, השתמש ב-'all' כברירת מחדל
+      timeFilter: filter.timeFilter || 'all',
+      // אם groupId הוא 'all', שלח undefined כדי לקבל את כל הקבוצות
+      groupId: filter.groupId === 'all' ? undefined : filter.groupId,
+      // ודא שיש סטטוסים לסינון
+      statuses: filter.statuses || ['completed', 'final_results']
+    };
+    
+    console.log('playerStatistics: פילטר מתוקן שמועבר לפונקציית filterGames:', JSON.stringify(filterToApply));
+    const filteredGames = filterGames(allGames, filterToApply);
+    console.log(`playerStatistics: לאחר סינון נשארו ${filteredGames.length} משחקים`);
+    
+    // בדיקת המשחקים שנשארו אחרי הסינון
+    if (filteredGames.length > 0 && filteredGames.length < 10) {
+      console.log("playerStatistics: פרטי המשחקים שנשארו אחרי הסינון:");
+      filteredGames.forEach((game, index) => {
+        const dateStr = game.date 
+          ? `${game.date.day}/${game.date.month}/${game.date.year}` 
+          : 'ללא תאריך';
+        console.log(`משחק ${index + 1}: ID=${game.id}, תאריך=${dateStr}, קבוצה=${game.groupId || 'ללא קבוצה'}, שחקנים=${game.players?.length || 0}`);
+      });
+    }
+    
+    // בדיקה מהירה של הנתונים שהתקבלו אחרי סינון
+    if (filteredGames.length === 0) {
+      console.warn('playerStatistics: לא נשארו משחקים אחרי סינון, מחזיר מידע ריק');
+      return {
+        playerParticipation: [],
+        mostActivePlayerCount: 0,
+        leastActivePlayerCount: 0
+      };
+    }
+    
+    console.log('playerStatistics: מביא רשימת שחקנים מהמאגר המרכזי');
+    const allUsers = store.getUsers();
+    console.log(`playerStatistics: התקבלו ${allUsers.length} שחקנים מהמאגר המרכזי`);
+    
+    // אם יש סינון לפי קבוצה, צריך להביא את רשימת השחקנים בקבוצה
+    const relevantGroups = filter.groupId 
+      ? [store.getGroup(filter.groupId)].filter(Boolean) 
+      : [];
+    
+    // מערך שחקנים רלוונטיים לקבוצה - ריק אם אין סינון לפי קבוצה
+    const groupPlayerIds: Set<string> = new Set();
+    
+    // אם סוננו לפי קבוצה, קבל את כל השחקנים בקבוצה
+    if (filter.groupId && relevantGroups.length > 0) {
+      const group = relevantGroups[0];
+      if (group) {  // וודא שה-group אינו undefined
+        console.log(`playerStatistics: סינון לפי קבוצה ${group.name} (${group.id})`);
+        
+        // הוסף רק שחקנים קבועים בקבוצה (לא אורחים)
+        if (group.permanentPlayers) {
+          group.permanentPlayers.forEach(playerId => groupPlayerIds.add(playerId));
+          console.log(`playerStatistics: נוספו ${group.permanentPlayers.length} שחקנים קבועים לקבוצה`);
+        }
+        
+        console.log(`playerStatistics: נמצאו ${groupPlayerIds.size} שחקנים קבועים בקבוצה`);
+      } else {
+        console.warn(`playerStatistics: לא נמצאה קבוצה עם מזהה ${filter.groupId}`);
+      }
+    }
+    
+    // יצירת מפה של השתתפות שחקנים
     const playerParticipationMap = new Map<string, {
       playerId: string;
       playerName: string;
@@ -278,26 +365,54 @@ export const getParticipationStatistics = async (
       rebuyCount: number;
       totalMoney: number;
       attendanceRate: number;
+      isActiveInGroup: boolean; // האם שחקן פעיל בקבוצה הנבחרת
     }>();
     
-    // Initialize map with all players
-    allUsers.forEach((user: UserProfile) => {
+    // אתחול המפה עם כל השחקנים או רק שחקני הקבוצה אם יש סינון
+    const relevantUsers = filter.groupId
+      ? allUsers.filter(user => groupPlayerIds.has(user.id))
+      : allUsers;
+    
+    if (filter.groupId) {
+      console.log(`playerStatistics: אתחול שחקנים - ${relevantUsers.length} שחקנים רלוונטיים לקבוצה מתוך ${allUsers.length} סה"כ`);
+    } else {
+      console.log(`playerStatistics: אתחול כל השחקנים - ${allUsers.length}`);
+    }
+    
+    relevantUsers.forEach(user => {
       playerParticipationMap.set(user.id, {
         playerId: user.id,
-        playerName: user.name || 'Unknown',
+        playerName: user.name,
         gamesPlayed: 0,
         buyInCount: 0,
         rebuyCount: 0,
         totalMoney: 0,
-        attendanceRate: 0
+        attendanceRate: 0,
+        isActiveInGroup: filter.groupId ? groupPlayerIds.has(user.id) : false
       });
     });
     
+    // מעקב אחר שחקנים שהשתתפו במשחקים של הקבוצה אך לא מוגדרים כחלק ממנה
+    const playersInGames = new Set<string>();
+    
     // Count game participation
-    filteredGames.forEach(game => {
-      game.players?.forEach(player => {
+    filteredGames.forEach((game, index) => {
+      if (!game.players || game.players.length === 0) {
+        console.warn(`playerStatistics: משחק ${game.id} ללא שחקנים, מדלג`);
+        return;
+      }
+      
+      console.log(`playerStatistics: מעבד משחק ${index + 1}/${filteredGames.length}, מזהה: ${game.id}, מספר שחקנים: ${game.players.length}`);
+      
+      game.players.forEach(player => {
         const playerId = player.userId || player.id;
-        if (!playerId) return;
+        if (!playerId) {
+          console.warn('playerStatistics: שחקן ללא מזהה במשחק, מדלג');
+          return;
+        }
+        
+        // רשום ששחקן זה השתתף במשחק, לשימוש בסינון לאחר מכן
+        playersInGames.add(playerId);
         
         const participation = playerParticipationMap.get(playerId);
         if (participation) {
@@ -305,8 +420,9 @@ export const getParticipationStatistics = async (
           participation.buyInCount += player.buyInCount || 0;
           participation.rebuyCount += player.rebuyCount || 0;
           participation.totalMoney += player.finalResultMoney || 0;
-        } else {
-          // Handle players that might not be in allUsers
+        } else if (filter.groupId) {
+          // במקרה של סינון לפי קבוצה, נוסיף שחקנים שהשתתפו במשחקים גם אם לא חלק מהקבוצה
+          console.log(`playerStatistics: נמצא שחקן שהשתתף במשחקי הקבוצה אך לא מוגדר בה: ${player.name || playerId}`);
           playerParticipationMap.set(playerId, {
             playerId,
             playerName: player.name || 'לא ידוע',
@@ -314,39 +430,66 @@ export const getParticipationStatistics = async (
             buyInCount: player.buyInCount || 0,
             rebuyCount: player.rebuyCount || 0,
             totalMoney: player.finalResultMoney || 0,
-            attendanceRate: 0
+            attendanceRate: 0,
+            isActiveInGroup: false
+          });
+        } else {
+          // שחקן שלא נמצא במערכת אך השתתף במשחקים
+          console.log(`playerStatistics: נמצא שחקן שאינו ברשימת השחקנים המרכזית: ${player.name || playerId}`);
+          playerParticipationMap.set(playerId, {
+            playerId,
+            playerName: player.name || 'לא ידוע',
+            gamesPlayed: 1,
+            buyInCount: player.buyInCount || 0,
+            rebuyCount: player.rebuyCount || 0,
+            totalMoney: player.finalResultMoney || 0,
+            attendanceRate: 0,
+            isActiveInGroup: false
           });
         }
       });
     });
     
+    // בסינון לפי קבוצה - וודא שמצוינים רק שחקנים רלוונטיים:
+    // - שחקנים השייכים לקבוצה (קבועים או אורחים)
+    // - שחקנים שהשתתפו במשחקי הקבוצה
+    if (filter.groupId) {
+      // סנן שחקנים לא רלוונטיים
+      for (const [playerId, data] of playerParticipationMap.entries()) {
+        if (!data.isActiveInGroup && !playersInGames.has(playerId)) {
+          console.log(`playerStatistics: מסיר שחקן ${data.playerName} שאינו פעיל בקבוצה ולא השתתף במשחקים`);
+          playerParticipationMap.delete(playerId);
+        }
+      }
+      console.log(`playerStatistics: לאחר סינון נשארו ${playerParticipationMap.size} שחקנים רלוונטיים`);
+    }
+    
+    console.log('playerStatistics: מחשב אחוזי השתתפות וממיין תוצאות');
     // Calculate participation rates and sort
     const totalGames = filteredGames.length;
     const playerParticipation = Array.from(playerParticipationMap.values())
-      .filter(player => player.gamesPlayed > 0) // Only include players who played at least one game
-      .map(player => ({
-        playerId: player.playerId,
-        playerName: player.playerName,
-        gamesCount: player.gamesPlayed,
-        participationRate: totalGames > 0 ? 
-          (player.gamesPlayed / totalGames) * 100 : 0
+      .map(participation => ({
+        playerId: participation.playerId,
+        playerName: participation.playerName,
+        gamesCount: participation.gamesPlayed,
+        participationRate: totalGames > 0 ? (participation.gamesPlayed / totalGames) * 100 : 0
       }))
       .sort((a, b) => b.gamesCount - a.gamesCount);
     
-    // Find most and least active player counts
+    // Calculate most and least active player counts
     const mostActivePlayerCount = playerParticipation.length > 0 ? 
       playerParticipation[0].gamesCount : 0;
-    
     const leastActivePlayerCount = playerParticipation.length > 0 ? 
       playerParticipation[playerParticipation.length - 1].gamesCount : 0;
     
+    console.log(`playerStatistics: סיום חישוב סטטיסטיקות - ${playerParticipation.length} שחקנים`);
     return {
       playerParticipation,
       mostActivePlayerCount,
       leastActivePlayerCount
     };
   } catch (error) {
-    console.error('Error getting participation statistics:', error);
+    console.error('playerStatistics: שגיאה בחישוב סטטיסטיקות השתתפות:', error);
     throw error;
   }
 };

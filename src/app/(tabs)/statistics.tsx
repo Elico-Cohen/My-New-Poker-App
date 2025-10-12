@@ -1,7 +1,7 @@
 // src/app/(tabs)/statistics.tsx
 import React, { useState } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Text } from '@/components/common/Text';
 import { Icon } from '@/components/common/Icon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -77,6 +77,8 @@ export default function StatisticsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false, header: () => null }} />
+      
       {/* Header */}
       <HeaderBar 
         title="סטטיסטיקות"

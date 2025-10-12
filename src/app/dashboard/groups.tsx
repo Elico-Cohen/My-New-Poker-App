@@ -140,7 +140,7 @@ export default function GroupsScreen() {
       {/* Header with Back Button */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.push('/dashboard')}
+          onPress={() => router.replace('/dashboard')}
           style={styles.backButton}
         >
           <Icon name="arrow-right" size="medium" color={CASINO_COLORS.gold} />
@@ -191,7 +191,7 @@ export default function GroupsScreen() {
                   <Button
                     variant="ghost"
                     icon="trash-can"
-                    iconColor={CASINO_COLORS.gold}
+                    iconColor="#ef4444"
                     iconSize={24}
                     onPress={() => handleDeleteGroup(group)}
                     style={styles.deleteButton}
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderRight: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 20,
   },
   infoContainer: {
     padding: 16,
@@ -426,6 +426,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  editButton: {},
-  deleteButton: {},
+  editButton: {
+    padding: 8,
+    marginRight: 4,
+  },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 4,
+  },
 });

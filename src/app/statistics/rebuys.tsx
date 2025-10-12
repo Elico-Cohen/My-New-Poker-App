@@ -1,8 +1,9 @@
 // src/app/statistics/rebuys.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
@@ -68,69 +69,109 @@ export default function RebuyStatisticsScreen() {
  
  // יצירת אפשרויות הקבוצה מהנתונים שהתקבלו מההוק
  useEffect(() => {
+   console.log('RebuyScreen: useEffect - עדכון אפשרויות קבוצה. מספר קבוצות:', groups?.length);
+   
    if (groups && groups.length > 0) {
+     // סינון רק קבוצות פעילות
+     const activeGroups = groups.filter(group => group.isActive);
+     console.log('RebuyScreen: מספר קבוצות פעילות:', activeGroups.length);
+     
      const options = [
        { label: 'כל הקבוצות', value: 'all' },
-       ...groups.map(group => ({
+       ...activeGroups.map(group => ({
          label: group.name,
          value: group.id
        }))
      ];
      setGroupOptions(options);
+     console.log('RebuyScreen: אפשרויות קבוצה עודכנו');
+   } else {
+     console.log('RebuyScreen: אין קבוצות זמינות או הן עדיין בטעינה');
    }
  }, [groups]);
  
- // טעינת הנתונים לפי סינון
- const loadData = async () => {
-   try {
-     setLoading(true);
-     setError(null);
-     
-     console.log('RebuyScreen: מנקה מטמון ומרענן נתונים');
-     clearStatsCache();
-     await syncService.forceRefresh();
-     
-     // יצירת אובייקט הסינון עם הערכים הנוכחיים
-     const filter: StatisticsFilter = {
-       timeFilter: filterDate as 'all' | 'month' | 'quarter' | 'year',
-       groupId: filterGroup !== 'all' ? filterGroup : undefined,
-       statuses: ['completed', 'final_results']
-     };
-     
-     console.log('RebuyScreen: מבקש סטטיסטיקות ריבאיים עם פילטר:', filter);
-     
-     // קבלת הנתונים מהשירות
-     const stats = await getRebuyStatistics(filter);
-     setRebuyStats(stats);
-     
-     console.log('RebuyScreen: התקבלו נתוני ריבאיים בהצלחה');
-   } catch (error) {
-     console.error('שגיאה בטעינת סטטיסטיקות ריבאיים:', error);
-     setError('שגיאה בטעינת הנתונים. נסה שוב.');
-   } finally {
-     setLoading(false);
-   }
- };
+ // טעינת הנתונים לפי סינון - גרסה משופרת עם דגל למניעת רענונים כפולים
+ const isRefreshingRef = useRef(false);
+ const lastRefreshTimeRef = useRef(0);
+
+ const loadData = async (forceRefresh = false) => {
+  // מונע טעינות כפולות
+  if (isRefreshingRef.current) {
+    console.log('RebuyScreen: דילוג על טעינה - כבר מתבצעת טעינה');
+    return;
+  }
+
+  try {
+    isRefreshingRef.current = true;
+    setLoading(true);
+    setError(null);
+
+    // ניקוי המטמון תמיד לפני טעינה מחדש
+    console.log('RebuyScreen: מנקה מטמון סטטיסטיקות');
+    clearStatsCache();
+
+    // רק אם נדרש רענון מאולץ
+    if (forceRefresh) {
+      console.log('RebuyScreen: מבצע רענון מאולץ של הנתונים');
+      await syncService.forceRefresh();
+    }
+
+    const filter: StatisticsFilter = {
+      timeFilter: filterDate as 'all' | 'month' | 'quarter' | 'year',
+      groupId: filterGroup !== 'all' ? filterGroup : undefined,
+      statuses: ['completed', 'final_results']
+    };
+
+    console.log('RebuyScreen: מבקש סטטיסטיקות עם פילטר:', JSON.stringify(filter));
+    const stats = await getRebuyStatistics(filter);
+    setRebuyStats(stats);
+    console.log('RebuyScreen: הנתונים נטענו בהצלחה');
+
+  } catch (error) {
+    console.error('RebuyScreen: שגיאה בטעינת הנתונים:', error);
+    setError('שגיאה בטעינת הנתונים');
+  } finally {
+    setLoading(false);
+    isRefreshingRef.current = false;
+  }
+};
  
- // טעינת הנתונים כאשר משתנים הפילטרים
+ // טעינת הנתונים כאשר משתנים הפילטרים או כשחוזרים למסך
  useEffect(() => {
-   if (!groupsLoading) {
-     loadData();
+   // אם הקבוצות עדיין נטענות, נחכה
+   if (groupsLoading) {
+     console.log('RebuyScreen: ממתין לטעינת הקבוצות');
+     return;
    }
- }, [filterDate, filterGroup, groupsLoading]);
+
+   // טוען נתונים בכל שינוי של הפילטרים
+   console.log('RebuyScreen: טוען נתונים - הפילטרים השתנו');
+   loadData(false);
+ }, [groupsLoading, filterDate, filterGroup]);
  
  // פונקציית רענון
  const handleRefresh = () => {
-   loadData();
+   console.log('RebuyScreen: מבצע רענון ידני');
+   // מאלץ רענון מלא כולל סנכרון מחדש
+   loadData(true);
  };
+ 
+ // מאזין לאירוע focus של המסך
+ useFocusEffect(
+   React.useCallback(() => {
+     console.log('RebuyScreen: המסך קיבל פוקוס - מרענן נתונים');
+     loadData(false);
+   }, [])
+ );
  
  // חזרה למסך הסטטיסטיקה הראשי
  const handleBack = () => {
-   router.back();
+   router.replace("../index");
  };
  
  // מעקב אחרי שינוי טאב
  useEffect(() => {
+   console.log(`RebuyScreen: שינוי טאב - הטאב הפעיל כעת: ${activeTab}`);
    // כאשר נכנסים לטאב הקבוצות, מדפיסים את הנתונים הגולמיים לדיבוג
    if (activeTab === 'groups' && rebuyStats) {
      console.log('=== נתוני סה"כ קניות גולמיים ===');
@@ -165,6 +206,8 @@ export default function RebuyStatisticsScreen() {
            console.log(`  ${idx + 1}. ${player.playerName}: ${player.rebuyCount} ריבאיים`);
          });
        }
+     } else {
+       console.log('המשחק עם הכי הרבה ריבאיים: אין נתונים');
      }
      
      // לוג של המשחק עם הכי פחות ריבאיים (אם הוא קיים במודל)
@@ -172,6 +215,8 @@ export default function RebuyStatisticsScreen() {
      if ((rebuyStats as any).gameWithLeastRebuys) {
        console.log(`המשחק עם הכי פחות ריבאיים: מזהה משחק: ${(rebuyStats as any).gameWithLeastRebuys.gameId}, תאריך: ${(rebuyStats as any).gameWithLeastRebuys.date}`);
        console.log(`כמות ריבאיים: ${(rebuyStats as any).gameWithLeastRebuys.rebuyCount}, מספר שחקנים: ${(rebuyStats as any).gameWithLeastRebuys.playersCount}, קבוצה: ${(rebuyStats as any).gameWithLeastRebuys.groupName}`);
+     } else {
+       console.log('המשחק עם הכי פחות ריבאיים: אין נתונים');
      }
      
      console.log('==============================');
@@ -185,42 +230,18 @@ export default function RebuyStatisticsScreen() {
    console.log('חישוב סה"כ קניות בכסף מנתונים אמיתיים...');
    
    // אם סיננו לפי קבוצה מסוימת
-   if (filterGroup && rebuyStats.groupsRebuyStats) {
-     // חיפוש הקבוצה המסוימת בנתוני הסטטיסטה של הקבוצות
+   if (filterGroup !== 'all' && rebuyStats.groupsRebuyStats) {
      const groupStats = rebuyStats.groupsRebuyStats.find(g => g.groupId === filterGroup);
      if (groupStats) {
        console.log(`מחשב את סה"כ הקניות עבור קבוצה ספציפית: ${groupStats.groupName}`);
        return groupStats.totalPurchases;
      }
+     return 0;
    }
    
-   // אם בחרנו "כל הקבוצות" או לא מצאנו את הקבוצה הספציפית
-   if (rebuyStats.totalPurchases) {
-     console.log(`משתמש בסה"כ הקניות הכולל: ${rebuyStats.totalPurchases}`);
-     return rebuyStats.totalPurchases;
-   }
-   
-   // כל השדות שקשורים לקניות ב-rebuyStats - כגיבוי
-   const highestPurchase = rebuyStats.playerWithHighestTotalPurchases?.totalPurchaseAmount || 0;
-   const lowestPurchase = rebuyStats.playerWithLowestTotalPurchases?.totalPurchaseAmount || 0;
-   const highestSinglePurchase = rebuyStats.playerWithHighestSingleGamePurchase?.purchaseAmount || 0;
-   const largestDifferencePlayer = rebuyStats.playerWithLargestCumulativeDifference?.totalPurchaseAmount || 0;
-   const singleGameDiffPurchase = rebuyStats.playerWithLargestSingleGameDifference?.purchaseAmount || 0;
-   
-   // לוג הנתונים הזמינים
-   console.log('נתוני קניות זמינים:');
-   console.log(`השחקן עם סה"כ הקניות הגבוה ביותר: ${rebuyStats.playerWithHighestTotalPurchases?.playerName}, סכום: ${highestPurchase}`);
-   console.log(`השחקן עם סה"כ הקניות הנמוך ביותר: ${rebuyStats.playerWithLowestTotalPurchases?.playerName}, סכום: ${lowestPurchase}`);
-   console.log(`השחקן עם ההפרש המצטבר הגדול ביותר: ${rebuyStats.playerWithLargestCumulativeDifference?.playerName}, סכום קניות: ${largestDifferencePlayer}`);
-   
-   // חישוב שונה - במקרה זה נשתמש באחד משני הערכים הזמינים:
-   // 1. אם הקניות של השחקן עם ההפרש המצטבר הגדול ביותר גבוהות יותר, נשתמש בהן
-   // 2. אחרת, נשתמש בקניות של השחקן עם סה"כ הקניות הגבוה ביותר
-   const totalEstimate = Math.max(highestPurchase, largestDifferencePlayer);
-   
-   console.log(`סה"כ קניות מעודכן: ${totalEstimate}`);
-   return totalEstimate;
- }
+   // אם בחרנו "כל הקבוצות"
+   return rebuyStats.totalPurchases || 0;
+ };
  
  // פונקציה לחישוב מספר המשחקים
  const calculateGamesCount = () => {
@@ -230,48 +251,30 @@ export default function RebuyStatisticsScreen() {
    if (filterGroup !== 'all' && rebuyStats.groupsRebuyStats) {
      const groupStats = rebuyStats.groupsRebuyStats.find(g => g.groupId === filterGroup);
      if (groupStats) {
-       // אם יש לנו את נתוני הקבוצה, נחשב את מספר המשחקים שלה
-       // נחלץ מספר משחקים מהנתונים הקיימים - אם יש ממוצע ריבאיים למשחק בקבוצה
-       if (groupStats.totalRebuys > 0) {
-         // אם אין לנו שדה gamesCount ישיר, ננסה להעריך מתוך המידע האחר
-         // אם יש לנו ממוצע של הקבוצה, נוכל לחשב את מספר המשחקים
-         const estimatedGames = Math.max(1, Math.round(groupStats.totalRebuys / (rebuyStats.averageRebuysPerGame || 1)));
-         console.log(`מספר משוער של משחקים בקבוצה ${groupStats.groupName}: ${estimatedGames}`);
-         return estimatedGames;
-       }
-       return 1; // אם אין לנו מידע מספק, נניח לפחות משחק אחד
+       return groupStats.gamesCount || 1;
      }
    }
    
    // אם בחרנו "כל הקבוצות" או לא מצאנו את הקבוצה הספציפית
-   if (rebuyStats.averageRebuysPerGame && rebuyStats.totalRebuys) {
-     // אם יש לנו את ממוצע הריבאיים למשחק, נוכל להעריך את מספר המשחקים
-     const estimatedGames = Math.max(1, Math.round(rebuyStats.totalRebuys / rebuyStats.averageRebuysPerGame));
-     console.log(`מספר משוער של משחקים כולל: ${estimatedGames}`);
-     return estimatedGames;
-   }
-   
-   // ברירת מחדל - נניח שיש לפחות משחק אחד
-   return 1;
- }
+   return rebuyStats.gamesCount || 1;
+ };
  
  // פונקציה לחישוב ממוצע למשחק (ריבאיים או קניות)
  const calculateAveragePerGame = (total: number, type = 'rebuys') => {
    if (!rebuyStats) return 0;
    
    // אם סיננו לפי קבוצה מסוימת
-   if (filterGroup && rebuyStats.groupsRebuyStats) {
+   if (filterGroup !== 'all' && rebuyStats.groupsRebuyStats) {
      const groupStats = rebuyStats.groupsRebuyStats.find(g => g.groupId === filterGroup);
      if (groupStats) {
-       // מנסים לקבל מספר משחקים מהנתונים, אם לא קיים מניחים שיש משחק אחד לפחות
-       const gamesCount = calculateGamesCount() || 1;
-       return type === 'rebuys' ? +(total / gamesCount).toFixed(1) : +(total / gamesCount).toFixed(0);
+       const gamesCount = groupStats.gamesCount || 1;
+       const value = type === 'rebuys' ? groupStats.totalRebuys : groupStats.totalPurchases;
+       return type === 'rebuys' ? +(value / gamesCount).toFixed(1) : +(value / gamesCount).toFixed(0);
      }
    }
    
    // אם לא סיננו או אם לא מצאנו את הקבוצה, מחשבים לפי כל המשחקים
-   // משתמשים בפונקציית calculateGamesCount במקום להשתמש בשדה rebuyStats.gamesCount
-   const gamesCount = calculateGamesCount() || 1;
+   const gamesCount = rebuyStats.gamesCount || 1;
    console.log(`חישוב ממוצע ${type} עבור כל הקבוצות: ${total} / ${gamesCount} = ${total/gamesCount}`);
    return type === 'rebuys' ? +(total / gamesCount).toFixed(1) : +(total / gamesCount).toFixed(0);
  };
@@ -363,366 +366,397 @@ export default function RebuyStatisticsScreen() {
  
  // פונקציה שמציגה את תוכן הכרטיס לפי הקטגוריה והמצב הנבחרים
  const renderCardContent = () => {
-   // הצגת סטטיסטיקת ריבאיים (הרבה או מעט)
-   if (selectedCategory === 'rebuys') {
-     if (showMax) {
-       // הצגת המשחק עם הכי הרבה ריבאיים
-       const gameWithMostRebuys = getGameWithMostRebuysByGroup();
-       if (!gameWithMostRebuys) {
-         return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
-       }
-       
-       return (
-         <View style={styles.gameDetailContainer}>
-           <View style={{
-             backgroundColor: "#0D1B1E",
-             borderRadius: 8,
-             borderWidth: 1,
-             borderColor: "#FFD700",
-             padding: 12,
-             marginBottom: 16
-           }}>
-             <View style={{
-               flexDirection: 'row-reverse',
-               alignItems: 'center',
-               marginBottom: 8
-             }}>
-               <Icon name="calendar" size="medium" color="#FFFFFF" />
-               <Text style={{
-                 fontSize: 14,
-                 color: "#FFFFFF",
-                 marginRight: 8,
-                 fontWeight: '500'
-               }}>
-                 בתאריך {rebuyStats?.gameWithMostRebuys.date || 'לא ידוע'}
-               </Text>
-             </View>
-             <Text style={{
-               fontSize: 20,
-               fontWeight: 'bold',
-               color: "#FFD700",
-               textAlign: 'right'
-             }}>
-               סה"כ {rebuyStats?.gameWithMostRebuys.rebuyCount || 0} ריבאיים
-             </Text>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>קבוצה:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>
-                 {rebuyStats?.gameWithMostRebuys.groupName || 'לא ידוע'}
-               </Text>
-             </View>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>שחקנים:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats?.gameWithMostRebuys.playersCount || 0}</Text>
-             </View>
-           </View>
-           
-           {rebuyStats?.gameWithMostRebuys.topRebuyPlayers && rebuyStats.gameWithMostRebuys.topRebuyPlayers.length > 0 ? (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
-               {rebuyStats.gameWithMostRebuys.topRebuyPlayers.map((player, index) => (
-                 <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
-                   <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                   <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
-                   <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
-                 </View>
-               ))}
-             </View>
-           ) : (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
-               <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
-             </View>
-           )}
-           
-           <TouchableOpacity 
-             style={styles.viewGameButton}
-             onPress={() => router.push(`/history/${rebuyStats?.gameWithMostRebuys.gameId}`)}
-           >
-             <Text style={styles.viewGameText}>צפה במשחק</Text>
-           </TouchableOpacity>
-         </View>
-       );
-     } else {
-       // הצגת המשחק עם הכי מעט ריבאיים
-       const gameWithLeastRebuys = getGameWithLeastRebuysByGroup();
-       if (!gameWithLeastRebuys) {
-         return (
-           <View style={styles.noDataWithNotice}>
-             <Text style={styles.noDataText}>אין נתונים זמינים על המשחק עם הכי פחות ריבאיים</Text>
-             <Text style={styles.noticeText}>יש לעדכן את ה-API כדי לקבל נתונים אמיתיים</Text>
-           </View>
-         );
-       }
-       
-       return (
-         <View style={styles.gameDetailContainer}>
-           <View style={{
-             backgroundColor: "#0D1B1E",
-             borderRadius: 8,
-             borderWidth: 1,
-             borderColor: "#FFD700",
-             padding: 12,
-             marginBottom: 16
-           }}>
-             <View style={{
-               flexDirection: 'row-reverse',
-               alignItems: 'center',
-               marginBottom: 8
-             }}>
-               <Icon name="calendar" size="medium" color="#FFFFFF" />
-               <Text style={{
-                 fontSize: 14,
-                 color: "#FFFFFF",
-                 marginRight: 8,
-                 fontWeight: '500'
-               }}>
-                 בתאריך {gameWithLeastRebuys.date || 'לא ידוע'}
-               </Text>
-             </View>
-             <Text style={{
-               fontSize: 20,
-               fontWeight: 'bold',
-               color: "#FFD700",
-               textAlign: 'right'
-             }}>
-               סה"כ {gameWithLeastRebuys.rebuyCount || 0} ריבאיים
-             </Text>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>קבוצה:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>
-                 {gameWithLeastRebuys.groupName || 'לא ידוע'}
-               </Text>
-             </View>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>שחקנים:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>{gameWithLeastRebuys.playersCount || 0}</Text>
-             </View>
-           </View>
-           
-           {gameWithLeastRebuys.topRebuyPlayers && gameWithLeastRebuys.topRebuyPlayers.length > 0 ? (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
-               {gameWithLeastRebuys.topRebuyPlayers.map((player: any, index: number) => (
-                 <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
-                   <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                   <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
-                   <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
-                 </View>
-               ))}
-             </View>
-           ) : (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
-               <Text style={styles.noDataText}>אין שחקנים שביצעו ריבאיים במשחק זה</Text>
-             </View>
-           )}
-           
-           <TouchableOpacity 
-             style={styles.viewGameButton}
-             onPress={() => router.push(`/history/${gameWithLeastRebuys.gameId}`)}
-           >
-             <Text style={styles.viewGameText}>צפה במשחק</Text>
-           </TouchableOpacity>
-         </View>
-       );
-     }
-   } 
-   // הצגת סטטיסטיקת קניות (גבוה או נמוך)
-   else {
-     if (showMax) {
-       // הצגת המשחק עם סה"כ הקניות הגבוה ביותר
-       if (!rebuyStats?.gameWithMostPurchases?.gameId) {
-         return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
-       }
-       
-       return (
-         <View style={styles.gameDetailContainer}>
-           <View style={{
-             backgroundColor: "#0D1B1E",
-             borderRadius: 8,
-             borderWidth: 1,
-             borderColor: "#FFD700",
-             padding: 12,
-             marginBottom: 16
-           }}>
-             <View style={{
-               flexDirection: 'row-reverse',
-               alignItems: 'center',
-               marginBottom: 8
-             }}>
-               <Icon name="calendar" size="medium" color="#FFFFFF" />
-               <Text style={{
-                 fontSize: 14,
-                 color: "#FFFFFF",
-                 marginRight: 8,
-                 fontWeight: '500'
-               }}>
-                 בתאריך {rebuyStats.gameWithMostPurchases.date || 'לא ידוע'}
-               </Text>
-             </View>
-             <Text style={{
-               fontSize: 20,
-               fontWeight: 'bold',
-               color: "#FFD700",
-               textAlign: 'right'
-             }}>
-               סה"כ {rebuyStats.gameWithMostPurchases.purchaseAmount?.toLocaleString() || 0} ש"ח
-             </Text>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>קבוצה:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>
-                 {rebuyStats.gameWithMostPurchases.groupName || 'לא ידוע'}
-               </Text>
-             </View>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>שחקנים:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats.gameWithMostPurchases.playersCount || 0}</Text>
-             </View>
-           </View>
-           
-           {rebuyStats.gameWithMostPurchases.topPurchasePlayers && rebuyStats.gameWithMostPurchases.topPurchasePlayers.length > 0 ? (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
-               {rebuyStats.gameWithMostPurchases.topPurchasePlayers.map((player, index) => (
-                 <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
-                   <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                   <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
-                   <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
-                 </View>
-               ))}
-             </View>
-           ) : (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
-               <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
-             </View>
-           )}
-           
-           <TouchableOpacity 
-             style={styles.viewGameButton}
-             onPress={() => router.push(`/history/${rebuyStats.gameWithMostPurchases.gameId}`)}
-           >
-             <Text style={styles.viewGameText}>צפה במשחק</Text>
-           </TouchableOpacity>
-         </View>
-       );
-     } else {
-       // הצגת המשחק עם סה"כ הקניות הנמוך ביותר
-       if (!rebuyStats?.gameWithLeastPurchases?.gameId) {
-         return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
-       }
-       
-       return (
-         <View style={styles.gameDetailContainer}>
-           <View style={{
-             backgroundColor: "#0D1B1E",
-             borderRadius: 8,
-             borderWidth: 1,
-             borderColor: "#FFD700",
-             padding: 12,
-             marginBottom: 16
-           }}>
-             <View style={{
-               flexDirection: 'row-reverse',
-               alignItems: 'center',
-               marginBottom: 8
-             }}>
-               <Icon name="calendar" size="medium" color="#FFFFFF" />
-               <Text style={{
-                 fontSize: 14,
-                 color: "#FFFFFF",
-                 marginRight: 8,
-                 fontWeight: '500'
-               }}>
-                 בתאריך {rebuyStats.gameWithLeastPurchases.date || 'לא ידוע'}
-               </Text>
-             </View>
-             <Text style={{
-               fontSize: 20,
-               fontWeight: 'bold',
-               color: "#FFD700",
-               textAlign: 'right'
-             }}>
-               סה"כ {rebuyStats.gameWithLeastPurchases.purchaseAmount?.toLocaleString() || 0} ש"ח
-             </Text>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>קבוצה:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>
-                 {rebuyStats.gameWithLeastPurchases.groupName || 'לא ידוע'}
-               </Text>
-             </View>
-           </View>
-           
-           <View style={styles.gameStatsRow}>
-             <View style={{...styles.gameStatItem, flex: 1}}>
-               <Text style={styles.gameStatLabel}>שחקנים:</Text>
-               <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats.gameWithLeastPurchases.playersCount || 0}</Text>
-             </View>
-           </View>
-           
-           {rebuyStats.gameWithLeastPurchases.topPurchasePlayers && rebuyStats.gameWithLeastPurchases.topPurchasePlayers.length > 0 ? (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
-               {rebuyStats.gameWithLeastPurchases.topPurchasePlayers.map((player, index) => (
-                 <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
-                   <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                   <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
-                   <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
-                 </View>
-               ))}
-             </View>
-           ) : (
-             <View style={[styles.topPlayersContainer, {padding: 0}]}>
-               <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
-               <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
-             </View>
-           )}
-           
-           <TouchableOpacity 
-             style={styles.viewGameButton}
-             onPress={() => router.push(`/history/${rebuyStats.gameWithLeastPurchases.gameId}`)}
-           >
-             <Text style={styles.viewGameText}>צפה במשחק</Text>
-           </TouchableOpacity>
-         </View>
-       );
-     }
-   }
+    // הצגת סטטיסטיקת ריבאיים (הרבה או מעט)
+    if (selectedCategory === 'rebuys') {
+      if (showMax) {
+        // הצגת המשחק עם הכי הרבה ריבאיים
+        const gameWithMostRebuys = getGameWithMostRebuysByGroup();
+        if (!gameWithMostRebuys) {
+          return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
+        }
+        
+        return (
+          <View style={styles.gameDetailContainer}>
+            <View style={{
+              backgroundColor: "#0D1B1E",
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#FFD700",
+              padding: 12,
+              marginBottom: 16
+            }}>
+              <View style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <Icon name="calendar" size="medium" color="#FFFFFF" />
+                <Text style={{
+                  fontSize: 14,
+                  color: "#FFFFFF",
+                  marginRight: 8,
+                  fontWeight: '500'
+                }}>
+                  בתאריך {rebuyStats?.gameWithMostRebuys.date || 'לא ידוע'}
+                </Text>
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: "#FFD700",
+                textAlign: 'right'
+              }}>
+                סה"כ {rebuyStats?.gameWithMostRebuys.rebuyCount || 0} ריבאיים
+              </Text>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>קבוצה:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>
+                  {rebuyStats?.gameWithMostRebuys.groupName || 'לא ידוע'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>שחקנים:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats?.gameWithMostRebuys.playersCount || 0}</Text>
+              </View>
+            </View>
+            
+            {rebuyStats?.gameWithMostRebuys.topRebuyPlayers && rebuyStats.gameWithMostRebuys.topRebuyPlayers.length > 0 ? (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                {rebuyStats.gameWithMostRebuys.topRebuyPlayers.map((player, index) => (
+                  <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
+                    <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.viewGameButton}
+              onPress={() => router.push(`/history/${rebuyStats?.gameWithMostRebuys.gameId}`)}
+            >
+              <Text style={styles.viewGameText}>צפה במשחק</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      } else {
+        // הצגת המשחק עם הכי מעט ריבאיים
+        const gameWithLeastRebuys = getGameWithLeastRebuysByGroup();
+        if (!gameWithLeastRebuys) {
+          return (
+            <View style={styles.noDataWithNotice}>
+              <Text style={styles.noDataText}>אין נתונים זמינים על המשחק עם הכי פחות ריבאיים</Text>
+              <Text style={styles.noticeText}>יש לעדכן את ה-API כדי לקבל נתונים אמיתיים</Text>
+            </View>
+          );
+        }
+        
+        return (
+          <View style={styles.gameDetailContainer}>
+            <View style={{
+              backgroundColor: "#0D1B1E",
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#FFD700",
+              padding: 12,
+              marginBottom: 16
+            }}>
+              <View style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <Icon name="calendar" size="medium" color="#FFFFFF" />
+                <Text style={{
+                  fontSize: 14,
+                  color: "#FFFFFF",
+                  marginRight: 8,
+                  fontWeight: '500'
+                }}>
+                  בתאריך {gameWithLeastRebuys.date || 'לא ידוע'}
+                </Text>
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: "#FFD700",
+                textAlign: 'right'
+              }}>
+                סה"כ {gameWithLeastRebuys.rebuyCount || 0} ריבאיים
+              </Text>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>קבוצה:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>
+                  {gameWithLeastRebuys.groupName || 'לא ידוע'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>שחקנים:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>{gameWithLeastRebuys.playersCount || 0}</Text>
+              </View>
+            </View>
+            
+            {gameWithLeastRebuys.topRebuyPlayers && gameWithLeastRebuys.topRebuyPlayers.length > 0 ? (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                {gameWithLeastRebuys.topRebuyPlayers.map((player: any, index: number) => (
+                  <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
+                    <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={styles.noDataText}>אין שחקנים שביצעו ריבאיים במשחק זה</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.viewGameButton}
+              onPress={() => router.push(`/history/${gameWithLeastRebuys.gameId}`)}
+            >
+              <Text style={styles.viewGameText}>צפה במשחק</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+    } 
+    // הצגת סטטיסטיקת קניות (גבוה או נמוך)
+    else {
+      if (showMax) {
+        // הצגת המשחק עם סה"כ הקניות הגבוה ביותר
+        if (!rebuyStats?.gameWithMostPurchases?.gameId) {
+          return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
+        }
+        
+        return (
+          <View style={styles.gameDetailContainer}>
+            <View style={{
+              backgroundColor: "#0D1B1E",
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#FFD700",
+              padding: 12,
+              marginBottom: 16
+            }}>
+              <View style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <Icon name="calendar" size="medium" color="#FFFFFF" />
+                <Text style={{
+                  fontSize: 14,
+                  color: "#FFFFFF",
+                  marginRight: 8,
+                  fontWeight: '500'
+                }}>
+                  בתאריך {rebuyStats.gameWithMostPurchases.date || 'לא ידוע'}
+                </Text>
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: "#FFD700",
+                textAlign: 'right'
+              }}>
+                סה"כ {rebuyStats.gameWithMostPurchases.purchaseAmount?.toLocaleString() || 0} ש"ח
+              </Text>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>קבוצה:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>
+                  {rebuyStats.gameWithMostPurchases.groupName || 'לא ידוע'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>שחקנים:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats.gameWithMostPurchases.playersCount || 0}</Text>
+              </View>
+            </View>
+            
+            {rebuyStats.gameWithMostPurchases.topPurchasePlayers && rebuyStats.gameWithMostPurchases.topPurchasePlayers.length > 0 ? (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                {rebuyStats.gameWithMostPurchases.topPurchasePlayers.map((player, index) => (
+                  <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
+                    <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.viewGameButton}
+              onPress={() => router.push(`/history/${rebuyStats?.gameWithMostPurchases.gameId}`)}
+            >
+              <Text style={styles.viewGameText}>צפה במשחק</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      } else {
+        // הצגת המשחק עם סה"כ הקניות הנמוך ביותר
+        if (!rebuyStats?.gameWithLeastPurchases?.gameId) {
+          return <Text style={styles.noDataText}>אין נתונים זמינים</Text>;
+        }
+        
+        return (
+          <View style={styles.gameDetailContainer}>
+            <View style={{
+              backgroundColor: "#0D1B1E",
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#FFD700",
+              padding: 12,
+              marginBottom: 16
+            }}>
+              <View style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <Icon name="calendar" size="medium" color="#FFFFFF" />
+                <Text style={{
+                  fontSize: 14,
+                  color: "#FFFFFF",
+                  marginRight: 8,
+                  fontWeight: '500'
+                }}>
+                  בתאריך {rebuyStats.gameWithLeastPurchases.date || 'לא ידוע'}
+                </Text>
+              </View>
+              <Text style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: "#FFD700",
+                textAlign: 'right'
+              }}>
+                סה"כ {rebuyStats.gameWithLeastPurchases.purchaseAmount?.toLocaleString() || 0} ש"ח
+              </Text>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>קבוצה:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>
+                  {rebuyStats.gameWithLeastPurchases.groupName || 'לא ידוע'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.gameStatsRow}>
+              <View style={{...styles.gameStatItem, flex: 1}}>
+                <Text style={styles.gameStatLabel}>שחקנים:</Text>
+                <Text style={[styles.gameStatValue, styles.highlightedValue]}>{rebuyStats.gameWithLeastPurchases.playersCount || 0}</Text>
+              </View>
+            </View>
+            
+            {rebuyStats.gameWithLeastPurchases.topPurchasePlayers && rebuyStats.gameWithLeastPurchases.topPurchasePlayers.length > 0 ? (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                {rebuyStats.gameWithLeastPurchases.topPurchasePlayers.map((player, index) => (
+                  <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
+                    <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.topPlayersContainer, {padding: 0}]}>
+                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.viewGameButton}
+              onPress={() => router.push(`/history/${rebuyStats.gameWithLeastPurchases.gameId}`)}
+            >
+              <Text style={styles.viewGameText}>צפה במשחק</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+    }
  };
  
+ // יצירת אלמנט כפתור רענון לכותרת
+ const refreshButtonElement = (
+   <TouchableOpacity 
+     onPress={handleRefresh}
+     style={styles.headerButton}
+     activeOpacity={0.6}
+   >
+     <Icon name="refresh" size={28} color={CASINO_COLORS.gold} />
+   </TouchableOpacity>
+ );
+
+ // פונקציה לחישוב סה"כ ריבאיים מעודכנת
+ const calculateTotalRebuys = () => {
+   if (!rebuyStats) return 0;
+   
+   console.log('חישוב סה"כ ריבאיים מנתונים אמיתיים...');
+   
+   // אם סיננו לפי קבוצה מסוימת
+   if (filterGroup !== 'all' && rebuyStats.groupsRebuyStats) {
+     const groupStats = rebuyStats.groupsRebuyStats.find(g => g.groupId === filterGroup);
+     if (groupStats) {
+       console.log(`מחשב את סה"כ הריבאיים עבור קבוצה ספציפית: ${groupStats.groupName}`);
+       return groupStats.totalRebuys;
+     }
+     return 0;
+   }
+   
+   // אם בחרנו "כל הקבוצות"
+   return rebuyStats.totalRebuys || 0;
+ };
+
  return (
    <View style={styles.container}>
-     {/* הסרה מוחלטת של הכותרת הלבנה */}
-     <Stack.Screen options={{ headerShown: false }} />
-     
      {/* Header */}
      <HeaderBar
        title="סטטיסטיקת ריבאיים"
        showBack={true}
        backgroundColor={CASINO_COLORS.primary}
        onBackPress={handleBack}
+       textColor={CASINO_COLORS.gold}
+       borderColor={CASINO_COLORS.gold}
+       leftElement={refreshButtonElement}
      />
 
      {/* טאבים */}
@@ -735,31 +769,33 @@ export default function RebuyStatisticsScreen() {
      />
      
      {/* Filters */}
-     <View style={styles.filtersContainer}>
-       <View style={styles.filterRow}>
-         <Text style={styles.filterLabel}>קבוצה:</Text>
-         <View style={styles.filterControl}>
-           <Dropdown
-             value={filterGroup}
-             onSelect={(groupId) => {
-               setFilterGroup(groupId);
-             }}
-             items={groupOptions}
-           />
+     {activeTab !== 'general' && (
+       <View style={styles.filtersContainer}>
+         <View style={styles.filterRow}>
+           <Text style={styles.filterLabel}>קבוצה:</Text>
+           <View style={styles.filterControl}>
+             <Dropdown
+               value={filterGroup}
+               onSelect={(groupId) => {
+                 setFilterGroup(groupId);
+               }}
+               items={groupOptions}
+             />
+           </View>
+         </View>
+         
+         <View style={styles.filterRow}>
+           <Text style={styles.filterLabel}>תקופה:</Text>
+           <View style={styles.filterControl}>
+             <Dropdown
+               value={filterDate}
+               onSelect={setFilterDate}
+               items={dateFilterOptions}
+             />
+           </View>
          </View>
        </View>
-       
-       <View style={styles.filterRow}>
-         <Text style={styles.filterLabel}>תקופה:</Text>
-         <View style={styles.filterControl}>
-           <Dropdown
-             value={filterDate}
-             onSelect={setFilterDate}
-             items={dateFilterOptions}
-           />
-         </View>
-       </View>
-     </View>
+     )}
      
      {loading ? (
        <View style={styles.loadingContainer}>
@@ -779,30 +815,6 @@ export default function RebuyStatisticsScreen() {
          {/* תוכן לפי הטאב הנבחר */}
          {activeTab === 'general' && (
            <>
-             {/* Summary Cards */}
-             <View style={styles.statCardsContainer}>
-               <StatCard
-                 title="ממוצע ריבאיים למשחק"
-                 value={rebuyStats?.totalRebuys ? calculateAveragePerGame(rebuyStats.totalRebuys, 'rebuys') : 0}
-                 format="integer"
-                 size="medium"
-                 style={[styles.statCard, { width: '49%', borderColor: '#FFD700', borderWidth: 1, height: 'auto', minHeight: 0, padding: 10 }]}
-                 valueColor="#FFD700"
-                 backgroundColor="#0D1B1E"
-               />
-               
-               <StatCard
-                 title="ממוצע קניות למשחק"
-                 value={rebuyStats?.totalPurchases ? calculateAveragePerGame(rebuyStats.totalPurchases, 'purchases') : 0}
-                 format="integer"
-                 size="medium"
-                 style={[styles.statCard, { width: '49%', borderColor: '#FFD700', borderWidth: 1, height: 'auto', minHeight: 0, padding: 10 }]}
-                 valueColor="#FFD700"
-                 backgroundColor="#0D1B1E"
-                 suffix=" ש״ח"
-               />
-             </View>
-             
              {/* כפתורי קטגוריה לבחירה */}
              <View style={styles.categoryButtonsContainer}>
                <TouchableOpacity 
@@ -874,8 +886,8 @@ export default function RebuyStatisticsScreen() {
                        <Text style={styles.simpleStatTitle}>סה״כ ריבאיים</Text>
                      </View>
                      <Text style={styles.simpleStatValue}>
-                       {!filterGroup
-                         ? (rebuyStats?.totalRebuys || 0).toLocaleString()
+                       {filterGroup === 'all'
+                         ? (calculateTotalRebuys() || 0).toLocaleString()
                          : (rebuyStats?.groupsRebuyStats?.find(g => g.groupId === filterGroup)?.totalRebuys || 0).toLocaleString()}
                      </Text>
                    </View>
@@ -886,7 +898,7 @@ export default function RebuyStatisticsScreen() {
                        <Text style={styles.simpleStatTitle}>סה״כ קניות</Text>
                      </View>
                      <Text style={styles.simpleStatValue}>
-                       {(!filterGroup
+                       {(filterGroup === 'all'
                          ? calculateTotalPurchases()
                          : (rebuyStats?.groupsRebuyStats?.find(g => g.groupId === filterGroup)?.totalPurchases || 0)).toLocaleString()} ש״ח
                      </Text>
@@ -905,15 +917,38 @@ export default function RebuyStatisticsScreen() {
                      </Text>
                    </View>
                    
-                   {/* כרטיס 4: ממוצע סה"כ קניות לשחקן */}
+                   {/* כרטיס 4: ממוצע קניות לשחקן */}
                    <View style={[styles.simpleStatCard, styles.halfWidthCard]}>
                      <View style={styles.headerRow}>
-                       <Text style={styles.simpleStatTitle}>ממוצע סה״כ קניות לשחקן</Text>
+                       <Text style={styles.simpleStatTitle}>ממוצע קניות לשחקן</Text>
                      </View>
                      <Text style={styles.simpleStatValue}>
                        {rebuyStats?.totalPurchases && rebuyStats?.totalRebuys && rebuyStats?.averageRebuysPerPlayer ? 
                          Math.round((rebuyStats.totalPurchases / rebuyStats.totalRebuys) * rebuyStats.averageRebuysPerPlayer).toLocaleString()
                          : 0} ש״ח
+                     </Text>
+                   </View>
+                 </View>
+
+                 {/* כרטיסי ממוצעים למשחק */}
+                 <View style={styles.rowCardsContainer}>
+                   {/* כרטיס 5: ממוצע ריבאיים למשחק */}
+                   <View style={[styles.simpleStatCard, styles.halfWidthCard]}>
+                     <View style={styles.headerRow}>
+                       <Text style={styles.simpleStatTitle}>ממוצע ריבאיים למשחק</Text>
+                     </View>
+                     <Text style={styles.simpleStatValue}>
+                       {rebuyStats?.totalRebuys ? calculateAveragePerGame(rebuyStats.totalRebuys, 'rebuys') : 0}
+                     </Text>
+                   </View>
+                   
+                   {/* כרטיס 6: ממוצע קניות למשחק */}
+                   <View style={[styles.simpleStatCard, styles.halfWidthCard]}>
+                     <View style={styles.headerRow}>
+                       <Text style={styles.simpleStatTitle}>ממוצע קניות למשחק</Text>
+                     </View>
+                     <Text style={styles.simpleStatValue}>
+                       {rebuyStats?.totalPurchases ? calculateAveragePerGame(rebuyStats.totalPurchases, 'purchases') : 0} ש״ח
                      </Text>
                    </View>
                  </View>
@@ -1637,5 +1672,17 @@ const styles = StyleSheet.create({
    color: '#FFD700',
    fontWeight: 'bold',
    fontSize: 18,
+ },
+ refreshButton: {
+   padding: 8,
+ },
+ headerButton: {
+   width: 40,
+   height: 40,
+   borderRadius: 20,
+   justifyContent: 'center',
+   alignItems: 'center',
+   backgroundColor: 'rgba(255, 255, 255, 0.1)',
+   marginLeft: 8,
  },
 });

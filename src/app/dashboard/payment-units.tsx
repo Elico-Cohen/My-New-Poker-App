@@ -147,7 +147,7 @@ export default function PaymentUnitsScreen() {
       {/* Header with Back Button */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.push('/dashboard')}
+          onPress={() => router.replace('/dashboard')}
           style={styles.backButton}
         >
           <Icon name="arrow-right" size="medium" color={CASINO_COLORS.gold} />

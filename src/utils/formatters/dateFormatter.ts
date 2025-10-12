@@ -3,14 +3,14 @@ import { GameDate } from '@/models/Game';
 /**
  * ממיר אובייקט תאריך משחק למחרוזת בפורמט מקוצר
  * @param date אובייקט תאריך משחק
- * @returns מחרוזת בפורמט DD/MM/YY
+ * @returns מחרוזת בפורמט DD/MM/YYYY
  */
 export const formatShortDate = (date?: GameDate | null): string => {
   if (!date) return 'תאריך לא ידוע';
   
   const day = date.day.toString().padStart(2, '0');
   const month = date.month.toString().padStart(2, '0');
-  const year = date.year.toString().slice(-2);
+  const year = date.year.toString();
   
   return `${day}/${month}/${year}`;
 };

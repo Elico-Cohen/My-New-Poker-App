@@ -54,6 +54,14 @@ export type IconName =
   | 'check-circle'
   | 'close-circle'
   | 'delete'
+  | 'content-save-outline'
+  | 'check-circle-outline'
+  | 'alert-circle-outline'
+  | 'loading-indicator'
+  | 'account-plus'
+  | 'clipboard-list'
+  | 'chevron-up'
+  | 'chevron-down'
   ;
 
 export const ICON_SIZES = {

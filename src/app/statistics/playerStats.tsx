@@ -7,13 +7,20 @@ import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
 import { Dropdown } from '@/components/common/Dropdown';
-import { getPlayerStatistics } from '@/services/statistics/playerStatistics';
+import { getPlayerStatistics, getWinnersLosersStatistics } from '@/services/statistics/playerStatistics';
+import { getOpenGamesStatistics } from '@/calculations/legacy/openGamesBridge';
 import { StatisticsFilter, PlayerStats } from '@/models/Statistics';
 import StatisticsList from '@/components/statistics/StatisticsList';
 import { formatCurrency } from '@/utils/formatters/currencyFormatter';
 import { useUsers, useGroups } from '@/hooks/useAppStore';
+import { useAuth } from '@/contexts/AuthContext';
 import StatisticsChart from '@/components/statistics/StatisticsChart';
 import StatCard from '@/components/statistics/StatCard';
+import TabBar from '@/components/common/TabBar';
+import { store } from '@/store/AppStore';
+import { Game } from '@/models/Game';
+import { Group } from '@/models/Group';
+import HeaderBar from '@/components/navigation/HeaderBar';
 
 const CASINO_COLORS = {
   background: '#0D1B1E',
@@ -27,22 +34,75 @@ const CASINO_COLORS = {
   error: '#ef4444'
 };
 
+// הגדרת טאבים
+const TABS = [
+  { id: 'profits', label: 'רווחים' },
+  { id: 'general', label: 'כללי' },
+  { id: 'games', label: 'משחקים' }
+];
+
+// הוספת פרופרטיז חסרות לממשק PlayerStats
+export interface ExtendedPlayerStats extends PlayerStats {
+  // נתונים בסיסיים
+  profitHistory: number[];
+  bestProfit: number;
+  worstLoss: number;
+  gamesWithProfit: number;
+  gamesWithLoss: number;
+  totalGames: number;
+  avgPlayersPerGame: number;
+  
+  // נתוני משחקים פתוחים
+  openGames: number;
+  openGamesWon: number;
+  openGamesProfit: number;
+  
+  // מידע על רווחים לפי קבוצות
+  groupProfits: { id: string; title: string; value: number }[];
+  
+  // קישורים למשחקים עם רווח/הפסד מקסימליים
+  bestGameId: string;
+  worstGameId: string;
+  
+  // דירוגים ביחס לשחקנים אחרים
+  rankings: {
+    profitRank: number;
+    winRateRank: number;
+    gamesPlayedRank: number;
+    totalPlayers: number;
+  };
+  
+  // רשימת משחקים אחרונים
+  recentGames: {
+    id: string;
+    date: string;
+    groupName: string;
+    result: number;
+    buyIn: number;
+    rebuys: number;
+    players: number;
+    isOutlier: boolean;
+  }[];
+}
+
 export default function PlayerStatsScreen() {
   const router = useRouter();
   
   // הוקים לגישה לנתונים
   const { users, loading: usersLoading } = useUsers();
   const { groups, loading: groupsLoading } = useGroups();
+  const { user: currentUser } = useAuth();
   
   // State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<PlayerStats[] | null>(null);
+  const [stats, setStats] = useState<ExtendedPlayerStats[] | null>(null);
   const [timeFilter, setTimeFilter] = useState<string>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('all');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
   const [playerOptions, setPlayerOptions] = useState<{ label: string, value: string }[]>([]);
   const [groupOptions, setGroupOptions] = useState<{ label: string, value: string }[]>([]);
+  const [selectedTab, setSelectedTab] = useState<'profits' | 'general' | 'games'>('profits');
   
   // Time filter options
   const timeFilterOptions = [
@@ -52,33 +112,111 @@ export default function PlayerStatsScreen() {
     { label: 'שנה אחרונה', value: 'year' }
   ];
   
-  // עדכון אפשרויות הקבוצה והשחקנים מהנתונים שהתקבלו מההוקים
+  // עדכון אפשרויות הקבוצה
   useEffect(() => {
     if (groups && groups.length > 0) {
       const options = [
-        { label: 'כל הקבוצות', value: 'all' },
-        ...groups.map(group => ({
-          label: group.name,
-          value: group.id
-        }))
+        { label: 'כל הקבוצות', value: '' },
+        ...groups
+          .filter(group => group.isActive) // סינון רק קבוצות פעילות
+          .map(group => ({
+            label: group.name,
+            value: group.id
+          }))
       ];
       setGroupOptions(options);
     }
+  }, [groups]);
+  
+  // עדכון אפשרויות השחקנים לפי קבוצה נבחרת
+  useEffect(() => {
+    console.log('useEffect: עדכון אפשרויות שחקנים. מספר שחקנים:', users.length);
+    console.log('useEffect: קבוצה נבחרת:', selectedGroupId);
     
-    if (users && users.length > 0) {
-      const options = [
-        { label: 'כל השחקנים', value: 'all' },
-        ...users.map(user => ({
-          label: user.name,
-          value: user.id
-        }))
-      ];
-      setPlayerOptions(options);
+    let filteredUsers = users;
+    
+    // אם נבחרה קבוצה ספציפית, הצג רק שחקנים קבועים של הקבוצה
+    if (selectedGroupId && selectedGroupId !== 'all' && selectedGroupId !== '') {
+      const selectedGroup = groups.find(group => group.id === selectedGroupId);
+      if (selectedGroup && selectedGroup.permanentPlayers) {
+        console.log(`useEffect: מסנן שחקנים לפי קבוצה ${selectedGroup.name}, שחקנים קבועים: ${selectedGroup.permanentPlayers.length}`);
+        filteredUsers = users.filter(user => selectedGroup.permanentPlayers.includes(user.id));
+        console.log(`useEffect: לאחר סינון נשארו ${filteredUsers.length} שחקנים קבועים`);
+      }
     }
-  }, [groups, users]);
+    
+    // בדיקת הנתונים המלאים
+    console.log('useEffect: רשימת משתמשים מסוננת:', JSON.stringify(filteredUsers.map(u => ({id: u.id, name: u.name, email: u.email || 'אין אימייל'}))));
+    
+    const options = filteredUsers
+      .map(user => ({
+        label: user.name,
+        value: user.id,
+        email: user.email  // שמירת האימייל לצורך השוואות
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)); // מיון לפי סדר א'-ב'
+    
+    setPlayerOptions(options);
+    
+    // אם הרשימה השתנתה והשחקן הנוכחי לא ברשימה, בחר את הראשון
+    if (options.length > 0) {
+      const currentPlayerInList = options.find(option => option.value === selectedPlayerId);
+      if (!currentPlayerInList) {
+        console.log('useEffect: השחקן הנוכחי לא ברשימה המסוננת, בוחר את הראשון:', options[0].label);
+        setSelectedPlayerId(options[0].value);
+      }
+    } else if (selectedGroupId && selectedGroupId !== 'all' && selectedGroupId !== '') {
+      // אם אין שחקנים קבועים בקבוצה, נקה את הבחירה
+      console.log('useEffect: אין שחקנים קבועים בקבוצה הנבחרת');
+      setSelectedPlayerId('');
+    }
+    
+    // מציגים מידע על המשתמש הנוכחי לדיבוג
+    console.log('useEffect: המשתמש הנוכחי:', currentUser ? {
+      id: currentUser.id,
+      name: currentUser.name,
+      role: currentUser.role,
+      email: currentUser.email || 'אין אימייל'
+    } : 'לא מחובר');
+    
+  }, [users, selectedGroupId, groups]);
+  
+  // מציאת המזהה מהפיירסטור בתחילת הרכיב (אם המשתמש מחובר)
+  useEffect(() => {
+    if (currentUser?.email) {
+      console.log('useEffect: מחפש את מזהה השחקן בפיירסטור לפי אימייל', currentUser.email);
+      
+      // נמצא רק אם יש לנו משתמשים
+      if (users && users.length > 0) {
+        // חיפוש התאמה לפי אימייל
+        const firestoreUser = users.find(
+          u => u.email && u.email.toLowerCase() === currentUser.email.toLowerCase()
+        );
+        
+        if (firestoreUser) {
+          console.log(`useEffect: נמצא משתמש בפיירסטור המתאים לאימייל: ${firestoreUser.name} (${firestoreUser.id})`);
+          
+          // שמירת המזהה שנמצא
+          setSelectedPlayerId(firestoreUser.id);
+        } else {
+          console.log('useEffect: לא נמצאה התאמת אימייל בפיירסטור');
+          
+          // אם אין התאמה ויש שחקנים, בוחרים את הראשון
+          if (users.length > 0) {
+            console.log(`useEffect: בוחר את השחקן הראשון ברשימה: ${users[0].name} (${users[0].id})`);
+            setSelectedPlayerId(users[0].id);
+          }
+        }
+      } else {
+        console.log('useEffect: אין עדיין רשימת משתמשים זמינה');
+      }
+    } else {
+      console.log('useEffect: אין משתמש מחובר או אין לו אימייל');
+    }
+  }, [currentUser?.email, users]);
   
   // טעינת הנתונים
-  const loadData = async () => {
+  const loadPlayerStats = async () => {
     setLoading(true);
     setError(null);
     
@@ -86,22 +224,235 @@ export default function PlayerStatsScreen() {
       const filter: StatisticsFilter = {
         timeFilter: timeFilter as any,
         groupId: selectedGroupId !== 'all' ? selectedGroupId : undefined,
-        playerId: selectedPlayerId !== 'all' ? selectedPlayerId : undefined
+        playerId: undefined,
+        includeAllStatuses: true
       };
       
-      // בדיקה אם נדרש שחקן ספציפי
-      if (selectedPlayerId !== 'all') {
-        // קריאה עם מזהה שחקן ספציפי
-        const playerStatsData = await getPlayerStatistics(selectedPlayerId, filter);
-        setStats(Array.isArray(playerStatsData) ? playerStatsData : [playerStatsData]);
-      } else {
-        // קריאה לקבלת כל השחקנים
-        const playerStatsData = await getPlayerStatistics(filter);
-        setStats(Array.isArray(playerStatsData) ? playerStatsData : [playerStatsData]);
+      // קריאה עם מזהה שחקן ספציפי
+      const playerStatsData = await getPlayerStatistics(selectedPlayerId, filter);
+
+      // בנוסף, מביא סטטיסטיקות שחקנים לפי רווחים כדי לקבוע דירוג אמיתי
+      const winnersLosersStats = await getWinnersLosersStatistics(users.length, filter);
+
+      // מביא נתוני משחקים פתוחים
+      const openGamesStats = await getOpenGamesStatistics(filter);
+      
+      // מפה לאחסון מיקום/דירוג כל שחקן בכל קטגוריה
+      const rankingsMap = new Map<string, {
+        profitRank: number;
+        winRateRank: number;
+        gamesPlayedRank: number;
+      }>();
+      
+      // מילוי הדירוגים במפה
+      winnersLosersStats.bestCumulativePlayers.forEach((player, index) => {
+        const existingRanking = rankingsMap.get(player.playerId) || { profitRank: 0, winRateRank: 0, gamesPlayedRank: 0 };
+        existingRanking.profitRank = index + 1; // הדירוג הוא המיקום + 1
+        rankingsMap.set(player.playerId, existingRanking);
+      });
+      
+      winnersLosersStats.bestWinRatePlayers.forEach((player, index) => {
+        const existingRanking = rankingsMap.get(player.playerId) || { profitRank: 0, winRateRank: 0, gamesPlayedRank: 0 };
+        existingRanking.winRateRank = index + 1; // הדירוג הוא המיקום + 1
+        rankingsMap.set(player.playerId, existingRanking);
+      });
+      
+      // מספר השחקנים האמיתי שהשתתפו במשחקים המסוננים
+      const activePlayers = winnersLosersStats.bestCumulativePlayers.length;
+      console.log(`PlayerStats: מספר שחקנים פעילים בפילטרים הנוכחיים: ${activePlayers}`);
+      
+      // אם אין נתונים, נגדיר מערך ריק
+      if (playerStatsData === null) {
+        setStats([]);
+        return;
       }
+      
+      // נשמור אם זה מערך או אובייקט יחיד
+      const statsArray = Array.isArray(playerStatsData) ? playerStatsData : [playerStatsData];
+      
+      // קבלת כל המשחקים מהמאגר המרכזי
+      const allGames = store.getGames();
+      
+      // מיון המשחקים מהחדש לישן
+      const sortedGames = [...allGames].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date.year, a.date.month - 1, a.date.day).getTime() : 0;
+        const dateB = b.date ? new Date(b.date.year, b.date.month - 1, b.date.day).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      // קבלת קבוצות מהמאגר המרכזי
+      const allGroups = store.getGroups();
+      
+      // המרת הנתונים לטיפוס ExtendedPlayerStats
+      const extendedStats: ExtendedPlayerStats[] = statsArray.map((stat: PlayerStats) => {
+        // מחשב נתונים נוספים לצורך תצוגה
+        const totalGames = stat.gamesPlayed || 0;
+        const gamesWithProfit = stat.winCount || 0;
+        const gamesWithLoss = stat.lossCount || 0;
+        
+        // יצירת נתוני היסטוריית רווחים על בסיס הרווח הכולל
+        const profitHistory = [
+          0,
+          stat.netProfit * 0.2,
+          stat.netProfit * 0.4,
+          stat.netProfit * 0.6,
+          stat.netProfit * 0.8,
+          stat.netProfit
+        ];
+        
+        // שדות משחקים פתוחים עם נתונים אמיתיים
+        const playerGames = sortedGames.filter(game => {
+          const playerInGame = game.players?.find(player => 
+            player.userId === stat.playerId || player.id === stat.playerId
+          );
+          return playerInGame !== undefined;
+        });
+        
+        // מציאת נתוני המשחקים הפתוחים של השחקן הספציפי
+        const playerOpenGamesStats = openGamesStats.topWinners?.find(
+          winner => winner.playerId === stat.playerId
+        );
+        
+        // חישוב ממוצע שחקנים למשחק
+        const totalPlayers = playerGames.reduce((sum, game) => sum + (game.players?.length || 0), 0);
+        const avgPlayersPerGame = playerGames.length > 0 ? totalPlayers / playerGames.length : 0;
+        
+        // יצירת רשימת המשחקים האחרונים
+        const recentGames = playerGames
+          .filter(game => {
+            // סינון לפי קבוצה
+            if (selectedGroupId !== 'all' && selectedGroupId !== '') {
+              if (game.groupId !== selectedGroupId) {
+                return false;
+              }
+            }
+
+            // סינון לפי תקופת זמן
+            if (timeFilter !== 'all') {
+              const gameDate = game.date 
+                ? new Date(game.date.year, game.date.month - 1, game.date.day)
+                : new Date();
+              const now = new Date();
+              
+              switch (timeFilter) {
+                case 'month':
+                  const monthAgo = new Date();
+                  monthAgo.setMonth(now.getMonth() - 1);
+                  if (gameDate < monthAgo) return false;
+                  break;
+                  
+                case 'quarter':
+                  const quarterAgo = new Date();
+                  quarterAgo.setMonth(now.getMonth() - 3);
+                  if (gameDate < quarterAgo) return false;
+                  break;
+                  
+                case 'year':
+                  const yearAgo = new Date();
+                  yearAgo.setFullYear(now.getFullYear() - 1);
+                  if (gameDate < yearAgo) return false;
+                  break;
+              }
+            }
+            
+            return true;
+          })
+          .map(game => {
+            const playerInGame = game.players?.find(player => 
+              player.userId === stat.playerId || player.id === stat.playerId
+            );
+            const group = allGroups.find(g => g.id === game.groupId);
+            const finalResult = playerInGame?.finalResultMoney || 0;
+            
+            // חישוב אם המשחק הוא חריג - תוצאה שחורגת מהממוצע ביותר מסטיית תקן אחת
+            const isResultOutlier = Math.abs(finalResult) > Math.abs(stat.avgProfitPerGame) * 2;
+            
+            // פורמוט תאריך
+            const gameDate = game.date 
+              ? new Date(game.date.year, game.date.month - 1, game.date.day)
+              : new Date();
+            const formattedDate = gameDate.toLocaleDateString('he-IL');
+            
+            return {
+              id: game.id,
+              date: formattedDate,
+              groupName: group?.name || 'קבוצה לא ידועה',
+              result: finalResult,
+              buyIn: game.buyInSnapshot?.amount || 0,
+              rebuys: playerInGame?.rebuyCount || 0,
+              players: game.players?.length || 0,
+              isOutlier: isResultOutlier
+            };
+          });
+        
+        // חישוב רווחים לפי קבוצות
+        const groupProfits = allGroups
+          .filter(group => group.isActive)
+          .map(group => {
+            // סינון משחקים של הקבוצה הנוכחית
+            const groupGames = playerGames.filter(game => game.groupId === group.id);
+            
+            // חישוב סך הרווח בקבוצה זו
+            let groupProfit = 0;
+            groupGames.forEach(game => {
+              const playerInGame = game.players?.find(player => 
+                player.userId === stat.playerId || player.id === stat.playerId
+              );
+              if (playerInGame) {
+                groupProfit += playerInGame.finalResultMoney || 0;
+              }
+            });
+            
+            return {
+              id: group.id,
+              title: group.name,
+              value: groupProfit
+            };
+          })
+          // מיון לפי רווח (מהגבוה לנמוך)
+          .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+          // לקיחת 5 הקבוצות המובילות
+          .slice(0, 5);
+        
+        // קישורים למשחקים עם רווח/הפסד מקסימלי
+        const bestGameId = stat.bestGame?.gameId || '';
+        const worstGameId = stat.worstGame?.gameId || '';
+        
+        // קבלת הדירוגים האמיתיים מהמפה שיצרנו למעלה
+        const playerRankings = rankingsMap.get(stat.playerId) || { profitRank: 0, winRateRank: 0, gamesPlayedRank: 0 };
+        
+        return {
+          ...stat,
+          totalGames,
+          gamesWithProfit,
+          gamesWithLoss,
+          // נתונים נוספים
+          bestProfit: stat.bestGame?.profit || 0,
+          worstLoss: stat.worstGame?.loss || 0,
+          profitHistory,
+          groupProfits,
+          // נתוני משחקים פתוחים מהמקור החדש
+          openGames: playerOpenGamesStats?.winCount || 0,
+          openGamesWon: playerOpenGamesStats?.winCount || 0,
+          openGamesProfit: playerOpenGamesStats?.totalWon || 0,
+          bestGameId,
+          worstGameId,
+          rankings: {
+            // שימוש בדירוגים האמיתיים שחושבו
+            profitRank: playerRankings.profitRank || 1,
+            winRateRank: playerRankings.winRateRank || 1, 
+            gamesPlayedRank: 1, // עדיין לא מחושב  
+            totalPlayers: activePlayers
+          },
+          recentGames,
+          avgPlayersPerGame: avgPlayersPerGame
+        } as ExtendedPlayerStats;
+      });
+      
+      setStats(extendedStats);
     } catch (err) {
-      console.error('Error loading player statistics:', err);
-      setError('שגיאה בטעינת נתוני שחקנים');
+      console.error('שגיאה בטעינת סטטיסטיקות שחקן:', err);
+      setError('אירעה שגיאה בטעינת הנתונים. אנא נסה שוב.');
     } finally {
       setLoading(false);
     }
@@ -110,18 +461,18 @@ export default function PlayerStatsScreen() {
   // טעינת הנתונים כאשר משתנים הפילטרים
   useEffect(() => {
     if (!usersLoading && !groupsLoading) {
-      loadData();
+      loadPlayerStats();
     }
   }, [timeFilter, selectedPlayerId, selectedGroupId, usersLoading, groupsLoading]);
   
   // פונקציית רענון
   const handleRefresh = () => {
-    loadData();
+    loadPlayerStats();
   };
   
   // חזרה למסך הסטטיסטיקה הראשי
   const handleBack = () => {
-    router.back();
+    router.replace("../index");
   };
 
   // Format currency
@@ -138,38 +489,70 @@ export default function PlayerStatsScreen() {
     return CASINO_COLORS.error;
   };
 
+  // State עבור פילטור ומיון משחקים
+  const [gameSort, setGameSort] = useState<'date' | 'result' | 'group'>('date');
+  const [showOnlyWins, setShowOnlyWins] = useState(false);
+  const [showOnlyLosses, setShowOnlyLosses] = useState(false);
+  
+  // פונקציה לסינון משחקים (רק ניצחונות או רק הפסדים או הכל)
+  const filterGames = (games: ExtendedPlayerStats['recentGames']) => {
+    if (showOnlyWins) return games.filter(game => game.result > 0);
+    if (showOnlyLosses) return games.filter(game => game.result < 0);
+    return games;
+  };
+  
+  // פונקציה למיון משחקים לפי תאריך, תוצאה או קבוצה
+  const sortGames = (games: ExtendedPlayerStats['recentGames']) => {
+    if (gameSort === 'date') {
+      // מיון לפי תאריך (מהחדש לישן)
+      return [...games].sort((a, b) => {
+        const dateA = new Date(a.date.split('.').reverse().join('-'));
+        const dateB = new Date(b.date.split('.').reverse().join('-'));
+        return dateB.getTime() - dateA.getTime();
+      });
+    } else if (gameSort === 'result') {
+      // מיון לפי תוצאה (מהגבוה לנמוך)
+      return [...games].sort((a, b) => b.result - a.result);
+    } else {
+      // מיון לפי קבוצה (א'-ב')
+      return [...games].sort((a, b) => a.groupName.localeCompare(b.groupName));
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* הסרה מוחלטת של הכותרת הלבנה */}
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen
+        options={{
+          headerShown: false,
+        }}
+      />
       
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={handleBack}
-          style={styles.backButton}
-        >
-          <Icon name="arrow-right" size="medium" color={CASINO_COLORS.gold} />
-        </TouchableOpacity>
-        <Text variant="h4" style={styles.headerTitle}>
-          סטטיסטיקת שחקן
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <HeaderBar
+        title="סטטיסטת שחקן"
+        showBack={true}
+        backgroundColor={CASINO_COLORS.primary}
+        textColor={CASINO_COLORS.gold}
+        borderColor={CASINO_COLORS.gold}
+        onBackPress={handleBack}
+        leftElement={
+          <TouchableOpacity onPress={handleRefresh} style={styles.headerButton}>
+            <Icon name="refresh" size={24} color={CASINO_COLORS.gold} />
+          </TouchableOpacity>
+        }
+      />
+      
+      {/* TabBar Component */}
+      <TabBar
+        tabs={TABS.map(tab => ({
+          label: tab.label,
+          isActive: selectedTab === tab.id,
+          onPress: () => setSelectedTab(tab.id as any)
+        }))}
+      />
       
       {/* Filters */}
       <View style={styles.filtersContainer}>
-        <View style={styles.filterRow}>
-          <Text style={styles.filterLabel}>שחקן:</Text>
-          <View style={styles.filterControl}>
-            <Dropdown
-              value={selectedPlayerId}
-              onSelect={setSelectedPlayerId}
-              items={playerOptions}
-            />
-          </View>
-        </View>
-        
         <View style={styles.filterRow}>
           <Text style={styles.filterLabel}>קבוצה:</Text>
           <View style={styles.filterControl}>
@@ -177,6 +560,7 @@ export default function PlayerStatsScreen() {
               value={selectedGroupId}
               onSelect={setSelectedGroupId}
               items={groupOptions}
+              placeholder="כל הקבוצות"
             />
           </View>
         </View>
@@ -188,6 +572,23 @@ export default function PlayerStatsScreen() {
               value={timeFilter}
               onSelect={setTimeFilter}
               items={timeFilterOptions}
+              placeholder="כל הזמנים"
+            />
+          </View>
+        </View>
+
+        {/* קו הפרדה */}
+        <View style={styles.separator} />
+
+        <View style={styles.filterRow}>
+          <View style={styles.filterLabelWithIcon}>
+            <Icon name="account" size={24} color={CASINO_COLORS.gold} />
+          </View>
+          <View style={styles.filterControl}>
+            <Dropdown
+              value={selectedPlayerId}
+              onSelect={setSelectedPlayerId}
+              items={playerOptions}
             />
           </View>
         </View>
@@ -210,229 +611,172 @@ export default function PlayerStatsScreen() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView}>
-          {/* Player Performance Overview */}
-          <Card style={styles.overviewCard}>
-            {/* Player Header */}
-            <View style={styles.playerHeader}>
-              <View style={styles.playerInfo}>
-                <Icon name="account" size="large" color={CASINO_COLORS.gold} />
-                <Text style={styles.playerName}>{stats[0].playerName}</Text>
+          {/* טאב רווחים */}
+          {selectedTab === 'profits' && (
+            <View style={styles.tabContent}>
+              {/* סיכום בסגנון כרטיסים קטנים בשורה */}
+              <View style={styles.rowCardsContainer}>
+                {/* כרטיס רווח מצטבר */}
+                <View style={styles.simpleStatCard}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.simpleStatTitle}>רווח מצטבר</Text>
+                  </View>
+                  <Text style={[
+                    styles.simpleStatValue,
+                    { color: stats[0] && stats[0].netProfit >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error }
+                  ]}>
+                    {formatCurrency(stats[0] ? stats[0].netProfit : 0)}
+                  </Text>
+                </View>
+                
+                {/* כרטיס מספר משחקים */}
+                <View style={styles.simpleStatCard}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.simpleStatTitle}>מספר משחקים</Text>
+                  </View>
+                  <Text style={styles.simpleStatValue}>
+                    {stats[0].totalGames || 0}
+                  </Text>
+                </View>
               </View>
               
-              <StatCard
-                title="רווח/הפסד נקי"
-                value={stats[0].netProfit}
-                valueColor={stats[0].netProfit >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error}
-                format="currency"
-                size="large"
-                style={styles.profitCard}
-              />
-            </View>
-            
-            {/* Performance Metrics Cards */}
-            <View style={styles.metricsContainer}>
-              <StatCard
-                title="משחקים"
-                value={stats[0].gamesPlayed}
-                icon="cards-playing-outline"
-                format="integer"
-                size="small"
-                style={styles.metricCard}
-              />
-              
-              <StatCard
-                title="ניצחונות"
-                value={stats[0].winCount}
-                icon="trophy"
-                format="integer"
-                size="small"
-                style={styles.metricCard}
-              />
-              
-              <StatCard
-                title="הפסדים"
-                value={stats[0].lossCount}
-                icon="emoticon-sad-outline"
-                format="integer"
-                size="small"
-                style={styles.metricCard}
-              />
-              
-              <StatCard
-                title="אחוז ניצחון"
-                value={stats[0].winRate}
-                icon="percent"
-                format="percentage"
-                size="small"
-                valueColor={getPerformanceColor(stats[0].winRate - 50)} // Compare to 50% baseline
-                style={styles.metricCard}
-              />
-            </View>
-          </Card>
-          
-          {/* Performance Chart */}
-          <Card style={styles.card}>
-            <Text style={styles.cardTitle}>ביצועים לאורך זמן</Text>
-            
-            <StatisticsChart
-              type="line"
-              data={{
-                // Simulated performance data - in a real app, this would come from historical data
-                labels: ['התחלה', '', '', '', '', 'נוכחי'],
-                datasets: [{
-                  data: [0, 
-                    stats[0].netProfit * 0.2, 
-                    stats[0].netProfit * 0.4, 
-                    stats[0].netProfit * 0.6, 
-                    stats[0].netProfit * 0.8, 
-                    stats[0].netProfit
-                  ],
-                  colors: [stats[0].netProfit >= 0 ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)']
-                }]
-              }}
-              yAxisSuffix=" ₪"
-              height={200}
-            />
-            
-            <View style={styles.performanceIndicators}>
-              <View style={styles.indicator}>
-                <Text style={styles.indicatorLabel}>תשואה להשקעה</Text>
-                <Text style={[
-                  styles.indicatorValue, 
-                  {color: getPerformanceColor(stats[0].roi)}
-                ]}>
-                  {stats[0].roi.toFixed(1)}%
-                </Text>
+              <View style={styles.rowCardsContainer}>
+                {/* כרטיס רווח ממוצע למשחק */}
+                <View style={styles.simpleStatCard}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.simpleStatTitle}>רווח ממוצע למשחק</Text>
+                  </View>
+                  <Text style={[
+                    styles.simpleStatValue,
+                    { color: stats[0].avgProfitPerGame >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error }
+                  ]}>
+                    {(stats[0].avgProfitPerGame || 0).toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} ₪
+                  </Text>
+                </View>
+                
+                {/* כרטיס דירוג רווחים */}
+                <View style={styles.simpleStatCard}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.simpleStatTitle}>דירוג רווחים</Text>
+                  </View>
+                  <Text style={styles.simpleStatValue}>
+                    {stats[0].rankings.profitRank || 0}/{stats[0].rankings.totalPlayers || 0}
+                  </Text>
+                </View>
               </View>
-              
-              <View style={styles.indicator}>
-                <Text style={styles.indicatorLabel}>רווח ממוצע למשחק</Text>
-                <Text style={[
-                  styles.indicatorValue, 
-                  {color: stats[0].avgProfitPerGame >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error}
-                ]}>
-                  {formatCurrency(stats[0].avgProfitPerGame)}
-                </Text>
-              </View>
-            </View>
-          </Card>
-          
-          {/* Investment Breakdown */}
-          <Card style={styles.card}>
-            <Text style={styles.cardTitle}>ניתוח השקעה</Text>
-            
-            <View style={styles.investmentChartContainer}>
-              {/* Investment Pie Chart */}
-              <StatisticsChart
-                type="pie"
-                data={{
-                  labels: ['Buy-Ins', 'Rebuys'],
-                  datasets: [{
-                    data: [
-                      stats[0].totalBuyIns * (stats[0].totalInvestment / (stats[0].totalBuyIns + stats[0].totalRebuys)),
-                      stats[0].totalRebuys * (stats[0].totalInvestment / (stats[0].totalBuyIns + stats[0].totalRebuys))
-                    ],
-                    colors: ['rgba(255, 215, 0, 1)', 'rgba(59, 130, 246, 1)']
-                  }]
-                }}
-                height={180}
-              />
-              
-              {/* Investment Breakdown */}
-              <View style={styles.investmentDetails}>
-                <StatisticsList
-                  items={[
-                    {
-                      id: 'investment',
-                      title: 'סך השקעה',
-                      value: formatCurrency(stats[0].totalInvestment),
-                      valueColor: CASINO_COLORS.gold
-                    },
-                    {
-                      id: 'buyins',
-                      title: 'Buy-Ins',
-                      subtitle: `${stats[0].totalBuyIns} פעמים`,
-                      value: formatCurrency(stats[0].totalBuyIns * (stats[0].totalInvestment / (stats[0].totalBuyIns + stats[0].totalRebuys)))
-                    },
-                    {
-                      id: 'rebuys',
-                      title: 'Rebuys',
-                      subtitle: `${stats[0].totalRebuys} פעמים`,
-                      value: formatCurrency(stats[0].totalRebuys * (stats[0].totalInvestment / (stats[0].totalBuyIns + stats[0].totalRebuys)))
-                    },
-                    {
-                      id: 'return',
-                      title: 'סך החזרים',
-                      value: formatCurrency(stats[0].totalReturn),
-                      valueColor: CASINO_COLORS.success
-                    }
-                  ]}
-                  showDividers={true}
-                />
-              </View>
-            </View>
-          </Card>
-          
-          {/* Best & Worst Games */}
-          <Card style={styles.card}>
-            <Text style={styles.cardTitle}>משחקים בולטים</Text>
-            
-            <View style={styles.recordsContainer}>
-              {/* Best Game */}
-              {stats[0].bestGame && (
-                <View style={styles.recordCard}>
-                  <Text style={styles.recordTitle}>המשחק הטוב ביותר</Text>
-                  
-                  <View style={[styles.recordContent, styles.bestGameRecord]}>
-                    <Text style={styles.recordDate}>{stats[0].bestGame.date}</Text>
-                    
-                    <StatCard
-                      title="רווח"
-                      value={stats[0].bestGame.profit}
-                      valueColor={CASINO_COLORS.success}
-                      format="currency"
-                      size="medium"
-                      style={styles.recordStat}
-                    />
-                    
+
+              {/* כרטיס אחד גדול בסגנון פעילות משחקים */}
+              <View style={styles.averagesCard}>
+                <Text style={styles.averagesTitle}>משחקים בולטים</Text>
+                <View style={styles.averagesGrid}>
+                  <View style={styles.averageItem}>
+                    <Text style={styles.averageLabel}>הרווח הגדול ביותר</Text>
+                    <Text style={[styles.averageValue, { color: CASINO_COLORS.success }]}>
+                      {formatCurrency(stats[0].bestProfit || 0)}
+                    </Text>
                     <TouchableOpacity 
-                      style={styles.viewButton}
-                      onPress={() => router.push(`/history/${stats[0].bestGame!.gameId}`)}
+                      style={styles.profitViewGameButton}
+                      onPress={() => router.push({
+                        pathname: "/history/[id]",
+                        params: { id: stats[0].bestGameId }
+                      })}
                     >
-                      <Text style={styles.viewButtonText}>צפה במשחק</Text>
+                      <Text style={styles.profitViewGameButtonText}>צפה במשחק</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={styles.averageItem}>
+                    <Text style={styles.averageLabel}>ההפסד הגדול ביותר</Text>
+                    <Text style={[styles.averageValue, { color: CASINO_COLORS.error }]}>
+                      {formatCurrency(stats[0].worstLoss || 0)}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.profitViewGameButton}
+                      onPress={() => router.push({
+                        pathname: "/history/[id]",
+                        params: { id: stats[0].worstGameId }
+                      })}
+                    >
+                      <Text style={styles.profitViewGameButtonText}>צפה במשחק</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              )}
-              
-              {/* Worst Game */}
-              {stats[0].worstGame && (
-                <View style={styles.recordCard}>
-                  <Text style={styles.recordTitle}>המשחק הגרוע ביותר</Text>
+              </View>
+            </View>
+          )}
+          
+          {/* טאב כללי */}
+          {selectedTab === 'general' && (
+            <View style={styles.tabContent}>
+              {/* כרטיס אחד גדול בסגנון פעילות כללית */}
+              <View style={styles.averagesCard}>
+                <Text style={styles.averagesTitle}>סטטיסטיקה כללית</Text>
+                <View style={styles.averagesGrid}>
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>שיעור משחקים רווחיים</Text>
+                    <Text style={styles.simpleStatValue}>{stats[0].winRate ? `${stats[0].winRate.toFixed(1)}%` : '0%'}</Text>
+                  </View>
                   
-                  <View style={[styles.recordContent, styles.worstGameRecord]}>
-                    <Text style={styles.recordDate}>{stats[0].worstGame.date}</Text>
-                    
-                    <StatCard
-                      title="הפסד"
-                      value={stats[0].worstGame.loss}
-                      valueColor={CASINO_COLORS.error}
-                      format="currency"
-                      size="medium"
-                      style={styles.recordStat}
-                    />
-                    
-                    <TouchableOpacity 
-                      style={styles.viewButton}
-                      onPress={() => router.push(`/history/${stats[0].worstGame!.gameId}`)}
-                    >
-                      <Text style={styles.viewButtonText}>צפה במשחק</Text>
-                    </TouchableOpacity>
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>ROI</Text>
+                    <Text style={styles.simpleStatValue}>{stats[0].roi ? `${stats[0].roi.toFixed(1)}%` : '0%'}</Text>
+                  </View>
+                  
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>סך הכל השקעות</Text>
+                    <Text style={styles.simpleStatValue}>{formatCurrency(stats[0].totalInvestment || 0)}</Text>
+                  </View>
+                  
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>סך החזרים</Text>
+                    <Text style={styles.simpleStatValue}>{formatCurrency(stats[0].totalReturn || 0)}</Text>
+                  </View>
+
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>מס׳ זכיות במשחקים פתוחים</Text>
+                    <Text style={[styles.simpleStatValue, { color: CASINO_COLORS.success }]}>{stats[0].openGamesWon || 0}</Text>
+                  </View>
+
+                  <View style={styles.averageItem}>
+                    <Text style={styles.simpleStatTitle}>סה״כ זכיות במשחקים פתוחים</Text>
+                    <Text style={[
+                      styles.simpleStatValue,
+                      { color: stats[0].openGamesProfit >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error }
+                    ]}>{formatCurrency(stats[0].openGamesProfit || 0)}</Text>
                   </View>
                 </View>
-              )}
+              </View>
             </View>
-          </Card>
+          )}
+          
+          {/* טאב משחקים */}
+          {selectedTab === 'games' && (
+            <View style={styles.tabContent}>
+              {/* רשימת משחקים */}
+              <View style={styles.gamesListContainer}>
+                <Text style={styles.gamesListTitle}>היסטוריית משחקים</Text>
+                
+                {stats[0].recentGames.map((game, index) => (
+                  <View key={game.id} style={styles.gameRow}>
+                    <Text style={styles.gameDate}>{game.date}</Text>
+                    <Text style={styles.gameGroup}>{game.groupName}</Text>
+                    <Text style={[
+                      styles.gameResult,
+                      { color: game.result >= 0 ? CASINO_COLORS.success : CASINO_COLORS.error }
+                    ]}>
+                      {formatCurrency(game.result)}
+                    </Text>
+                    <TouchableOpacity 
+                      style={styles.viewGameButton}
+                      onPress={() => router.push(`/history/${game.id}`)}
+                    >
+                      <Text style={styles.viewGameButtonText}>הצג משחק</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -445,25 +789,20 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.background,
   },
   header: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CASINO_COLORS.primary,
-    padding: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: CASINO_COLORS.gold,
-  },
-  headerTitle: {
-    color: CASINO_COLORS.gold,
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: 'bold',
+    padding: 10,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    padding: 5,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  refreshButton: {
+    padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -471,18 +810,19 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.surface,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: CASINO_COLORS.gold,
+    borderBottomColor: 'rgba(255, 215, 0, 0.3)',
   },
   filterRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   filterLabel: {
-    color: CASINO_COLORS.gold,
+    color: CASINO_COLORS.text,
+    fontSize: 16,
+    fontWeight: 'bold',
     width: 80,
     textAlign: 'right',
-    marginLeft: 12,
   },
   filterControl: {
     flex: 1,
@@ -493,9 +833,94 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
+    color: CASINO_COLORS.text,
+    marginTop: 10,
+  },
+  tabContent: {
+    padding: 16,
+  },
+  summaryCardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  customCard: {
+    width: '48%',
+    height: 70,
+    marginBottom: 12,
+    backgroundColor: '#0D1B1E',
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    borderRadius: 8,
+    padding: 8,
+  },
+  averagesCard: {
+    backgroundColor: '#0D1B1E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    padding: 16,
+    marginBottom: 16,
+  },
+  averagesTitle: {
+    color: CASINO_COLORS.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'right',
+  },
+  averagesGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  averageItem: {
+    width: '48%',
+    marginBottom: 16,
+    alignItems: 'flex-end',
+    backgroundColor: '#0D1B1E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    padding: 10,
+  },
+  averageLabel: {
+    color: CASINO_COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+    textAlign: 'right',
+  },
+  averageValue: {
     color: CASINO_COLORS.gold,
-    marginTop: 16,
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  viewGameButton: {
+    backgroundColor: CASINO_COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    width: '30%',
+  },
+  viewGameButtonText: {
+    color: CASINO_COLORS.gold,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    padding: 16,
+  },
+  bottomPadding: {
+    height: 20,
   },
   errorContainer: {
     flex: 1,
@@ -505,146 +930,133 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: CASINO_COLORS.error,
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 16,
     textAlign: 'center',
   },
   noPlayerText: {
-    color: CASINO_COLORS.warning,
-    marginTop: 16,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  scrollView: {
-    flex: 1,
-    padding: 16,
-  },
-  overviewCard: {
-    backgroundColor: CASINO_COLORS.surface,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: CASINO_COLORS.gold,
-  },
-  playerHeader: {
-    marginBottom: 16,
-  },
-  playerInfo: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  playerName: {
     color: CASINO_COLORS.gold,
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginRight: 12,
   },
-  profitCard: {
-    marginVertical: 12,
-    width: '100%',
+  noDataText: {
+    color: CASINO_COLORS.textSecondary,
+    textAlign: 'center',
+    fontSize: 16,
+    padding: 16,
   },
-  metricsContainer: {
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  // סגנונות הכרטיסים החדשים (מבוססים על rebuys.tsx)
+  rowCardsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    marginBottom: 16,
   },
-  metricCard: {
+  simpleStatCard: {
+    flexDirection: 'column',
+    backgroundColor: '#0D1B1E',
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    padding: 12,
+    borderRadius: 8,
     width: '48%',
-    marginBottom: 12,
   },
-  card: {
+  headerRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginBottom: 6,
+  },
+  simpleStatTitle: {
+    color: CASINO_COLORS.text,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  simpleStatValue: {
+    color: CASINO_COLORS.gold,
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: CASINO_COLORS.gold,
+    marginVertical: 12,
+    opacity: 0.3,
+  },
+  filterLabelWithIcon: {
+    width: 80,
+    alignItems: 'flex-end',
+  },
+  gamesListContainer: {
     backgroundColor: CASINO_COLORS.surface,
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: CASINO_COLORS.gold,
-  },
-  cardTitle: {
-    color: CASINO_COLORS.gold,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  performanceIndicators: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 215, 0, 0.2)',
-  },
-  indicator: {
-    alignItems: 'center',
-  },
-  indicatorLabel: {
-    color: CASINO_COLORS.textSecondary,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  indicatorValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  investmentChartContainer: {
-    flexDirection: 'column',
-  },
-  investmentDetails: {
+    padding: 16,
     marginTop: 16,
   },
-  recordsContainer: {
-    flexDirection: 'column',
-  },
-  recordCard: {
-    marginBottom: 16,
-  },
-  recordTitle: {
+  gamesListTitle: {
     color: CASINO_COLORS.gold,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 16,
+    textAlign: 'right',
   },
-  recordContent: {
-    borderRadius: 8,
-    padding: 12,
+  gameRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 215, 0, 0.1)',
   },
-  bestGameRecord: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderWidth: 1,
-    borderColor: CASINO_COLORS.success,
-  },
-  worstGameRecord: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderWidth: 1,
-    borderColor: CASINO_COLORS.error,
-  },
-  recordStat: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    marginVertical: 8,
-  },
-  recordDate: {
-    color: CASINO_COLORS.textSecondary,
+  gameDate: {
+    color: CASINO_COLORS.text,
     fontSize: 14,
-    marginBottom: 4,
+    fontWeight: 'bold',
+    width: '22%',
+    textAlign: 'right',
   },
-  viewButton: {
+  gameGroup: {
+    color: CASINO_COLORS.text,
+    fontSize: 14,
+    fontWeight: 'bold',
+    width: '22%',
+    textAlign: 'right',
+    paddingRight: 16,
+  },
+  gameResult: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    width: '22%',
+    textAlign: 'left',
+    paddingLeft: 16,
+  },
+  profitViewGameButton: {
     backgroundColor: CASINO_COLORS.primary,
-    padding: 8,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: CASINO_COLORS.gold,
+    marginTop: 8,
     width: '100%',
   },
-  viewButtonText: {
+  profitViewGameButtonText: {
     color: CASINO_COLORS.gold,
     fontSize: 14,
     fontWeight: 'bold',
-  }
+    textAlign: 'center',
+  },
 });

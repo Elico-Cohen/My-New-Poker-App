@@ -15,11 +15,22 @@ export default function HistoryLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
+          header: () => null,
+          title: '',
           contentStyle: {
             backgroundColor: '#0D1B1E',
           },
         }}
-      />
+      >
+        {/* Individual game details screen */}
+        <Stack.Screen 
+          name="[id]"
+          options={{
+            headerShown: false,
+            header: () => null
+          }}
+        />
+      </Stack>
     </ProtectedRoute>
   );
 }

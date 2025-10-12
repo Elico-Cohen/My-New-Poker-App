@@ -1,23 +1,36 @@
 // src/app/gameFlow/FinalResults.tsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, BackHandler } from 'react-native';
 import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { Icon } from '@/components/common/Icon';
-import { useRouter } from 'expo-router';
-import { useGameContext } from '@/contexts/GameContext';
+import { Dialog } from '@/components/common/Dialog';
+import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useGameContext, Player } from '@/contexts/GameContext';
 import { getAllUsers } from '@/services/users';
 
 export default function FinalResults() {
   const router = useRouter();
-  const { gameData, setGameData, updateGameStatus } = useGameContext();
+  const { gameData, setGameData, updateGameStatus, shouldUpdateStatus, canUserContinueThisGame } = useGameContext();
   const [loading, setLoading] = React.useState(false);
   // Track expanded player cards
   const [expandedPlayers, setExpandedPlayers] = useState<string[]>([]);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+
+  // בדיקת הרשאות להמשך המשחק
+  const canContinue = canUserContinueThisGame(gameData);
+
+  // Reset loading state when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+    }, [])
+  );
 
   // Helper function to calculate player investment
-  const calculatePlayerInvestment = (player) => {
+  const calculatePlayerInvestment = (player: Player) => {
     const buyInTotal = (player.buyInCount || 0) * (gameData.buyInSnapshot.amount || 0);
     const rebuyTotal = (player.rebuyCount || 0) * (gameData.rebuySnapshot.amount || 0);
     return buyInTotal + rebuyTotal;
@@ -54,8 +67,29 @@ export default function FinalResults() {
     return [...finalResults].sort((a, b) => (b.finalResultMoney || 0) - (a.finalResultMoney || 0));
   }, [finalResults]);
 
+  // Auto-update gameData with final results when calculations change
+  useEffect(() => {
+    const currentPlayersStr = JSON.stringify(gameData.players.map(p => ({ id: p.id, finalResultMoney: p.finalResultMoney })));
+    const calculatedPlayersStr = JSON.stringify(finalResults.map(p => ({ id: p.id, finalResultMoney: p.finalResultMoney })));
+    
+    if (currentPlayersStr !== calculatedPlayersStr) {
+      console.log('FinalResults: Auto-updating gameData with calculated finalResultMoney');
+      setGameData(prev => ({
+        ...prev,
+        players: prev.players.map(player => {
+          const calculated = finalResults.find(fr => fr.id === player.id);
+          return {
+            ...player,
+            finalResultMoney: calculated?.finalResultMoney || 0,
+            openGameWins: calculated?.openGameWins || 0
+          };
+        })
+      }));
+    }
+  }, [finalResults, setGameData]);
+
   // Toggle player card expansion
-  const togglePlayerExpansion = (playerId) => {
+  const togglePlayerExpansion = (playerId: string) => {
     setExpandedPlayers(prev => {
       if (prev.includes(playerId)) {
         return prev.filter(id => id !== playerId);
@@ -71,68 +105,22 @@ export default function FinalResults() {
 
       // Create sets for efficient lookup
       const gamePlayerIds = new Set(gameData.players.map(p => p.id));
-      const gamePlayerUnits = new Set(
-        gameData.players
-          .map(p => p.paymentUnitId)
-          .filter((id): id is string => id !== undefined)
-      );
+      
+      // For now, treat all players as solo players since paymentUnitId is not in Player interface
+      const soloPlayers = gameData.players;
+      const paymentUnitPlayers: never[] = []; // Empty array since we don't have payment units in Player interface
 
-      // Separate solo players and payment unit players
-      const soloPlayers = gameData.players.filter(p => !p.paymentUnitId);
-      const paymentUnitPlayers = gameData.players.filter(p => p.paymentUnitId);
-
-      // Log information about players and units
-      console.log('\n=== Game Players and Payment Units Analysis ===\n');
+      // Log information about players
+      console.log('\n=== Game Players Analysis ===\n');
       
       console.log('Total Players in Game:', gameData.players.length);
       console.log('Solo Players:', soloPlayers.length);
-      console.log('Players in Payment Units:', paymentUnitPlayers.length);
-      console.log('Unique Payment Units:', gamePlayerUnits.size);
       
       console.log('\n--- Solo Players ---');
       soloPlayers.forEach(player => {
         console.log(`${player.name} (${player.id})`);
         console.log(`  Final Result: ${player.finalResultMoney} ₪`);
       });
-
-      console.log('\n--- Payment Unit Analysis ---');
-      // Group players by payment unit
-      const unitGroups = new Map<string, { 
-        unitId: string; 
-        players: { id: string; name: string; result: number; }[];
-      }>();
-
-      paymentUnitPlayers.forEach(player => {
-        if (player.paymentUnitId) {
-          if (!unitGroups.has(player.paymentUnitId)) {
-            unitGroups.set(player.paymentUnitId, {
-              unitId: player.paymentUnitId,
-              players: []
-            });
-          }
-          unitGroups.get(player.paymentUnitId)!.players.push({
-            id: player.id,
-            name: player.name,
-            result: player.finalResultMoney || 0
-          });
-        }
-      });
-
-      // Log each payment unit
-      for (const [unitId, group] of unitGroups) {
-        console.log(`\nPayment Unit: ${unitId}`);
-        console.log('Players:');
-        group.players.forEach(player => {
-          console.log(`  - ${player.name} (${player.id})`);
-          console.log(`    Result: ${player.result} ₪`);
-        });
-        
-        const totalResult = group.players.reduce((sum, p) => sum + p.result, 0);
-        console.log(`Unit Total Result: ${totalResult} ₪`);
-        
-        const allPlayersPresent = group.players.length === 2;
-        console.log(`Complete Unit (both players present): ${allPlayersPresent ? 'Yes' : 'No'}`);
-      }
 
       console.log('\n=== End Analysis ===\n');
 
@@ -154,10 +142,31 @@ export default function FinalResults() {
     }
   };
 
+  // הסרת עדכון אוטומטי של סטטוס - נעשה באופן ידני במקומות המתאימים
+
+  // Handle hardware back press
+  useEffect(() => {
+    const backAction = () => {
+      setShowExitDialog(true);
+      return true; // Prevent default behavior (exiting the app)
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+    return () => backHandler.remove();
+  }, []);
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.backButton}>
+           <Icon name="arrow-right" size={24} color="#FFD700" />
+        </TouchableOpacity>
+        
+        <View style={styles.headerContent}>
         <Text variant="h4" style={styles.headerTitle}>
           תוצאות סופיות
         </Text>
@@ -171,7 +180,19 @@ export default function FinalResults() {
             gameData.gameDate.day
           ).toLocaleDateString('he-IL')}
         </Text>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={() => {
+            router.push('/(tabs)/home2');
+          }} 
+          style={styles.homeButton}
+        >
+          <Icon name="home" size={24} color="#FFD700" />
+        </TouchableOpacity>
       </View>
+
+      <ReadOnlyIndicator />
 
       {/* Players List with Expandable Cards */}
       <ScrollView style={styles.scrollView}>
@@ -198,8 +219,8 @@ export default function FinalResults() {
                   </Text>
                 </View>
                 <Icon
-                  name={expandedPlayers.includes(player.id) ? "chevron-up" : "chevron-down"}
-                  size="small"
+                  name={expandedPlayers.includes(player.id) ? "minus" : "plus"}
+                  size="medium"
                   color="#FFD700"
                 />
               </View>
@@ -219,7 +240,9 @@ export default function FinalResults() {
                       <View style={styles.detailItem}>
                         <Text style={styles.detailLabel}>שווי צ'יפים</Text>
                         <Text style={styles.detailValue}>
-                          {(player.finalChipsValue || 0).toFixed(2)} ₪
+                          {(player.exactChipsValue !== undefined ? player.exactChipsValue :
+                           (player.roundedRebuysCount !== undefined ? player.roundedRebuysCount * gameData.rebuySnapshot.amount : 0)
+                          ).toFixed(2)} ₪
                         </Text>
                       </View>
                       <View style={[styles.detailItem, styles.totalItem]}>
@@ -270,14 +293,30 @@ export default function FinalResults() {
         ))}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Button
-          title="המשך לחישוב תשלומים"
-          onPress={handleContinue}
-          disabled={loading}
-          style={styles.continueButton}
-        />
-      </View>
+      {canContinue && (
+        <View style={styles.footer}>
+          <Button
+            title="המשך לחישוב תשלומים"
+            onPress={handleContinue}
+            disabled={loading}
+            style={styles.continueButton}
+          />
+        </View>
+      )}
+
+      {/* Exit Confirmation Dialog */}
+      <Dialog
+        visible={showExitDialog}
+        title="חזרה למסך הקודם"
+        message="האם אתה בטוח שברצונך לחזור למסך הקודם?"
+        onCancel={() => setShowExitDialog(false)}
+        onConfirm={() => {
+          setShowExitDialog(false);
+          router.back(); // פשוט חזרה למסך הקודם במחסנית הניווט
+        }}
+        confirmText="כן, חזור"
+        cancelText="לא, המשך כאן"
+      />
     </View>
   );
 }
@@ -288,10 +327,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
     borderBottomWidth: 2,
     borderBottomColor: '#FFD700',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
     color: '#FFD700',
@@ -427,5 +481,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#35654d',
     borderColor: '#FFD700',
     borderWidth: 2,
+  },
+  homeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
 });
