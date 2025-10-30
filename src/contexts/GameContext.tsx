@@ -246,6 +246,10 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   // Get user from AuthContext
   const { user } = useAuth();
 
+  // מעקב אחרי זמן הסנכרון האחרון למניעת עומס
+  const [lastNetworkSyncTime, setLastNetworkSyncTime] = useState<number>(0);
+  const NETWORK_SYNC_COOLDOWN = 5000; // 5 שניות בין ניסיונות סנכרון
+
   // Internal setGameData that doesn't update timestamps (for loading from server)
   const setGameDataInternal = useCallback((data: GameData | ((prevData: GameData) => GameData)) => {
     setGameData(prevData => {
@@ -307,10 +311,20 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = NetInfo.addEventListener(state => {
       const connected = state.isConnected ?? false;
       setIsNetworkConnected(connected);
-      
+
       // כאשר חוזרים לחיבור, ננסה לסנכרן משחק מקומי לענן
       // אבל רק אם המשתמש מחובר ולא במצב הושלם
       if (connected && isGameActive && auth.currentUser && gameData.status !== 'completed') {
+        // בדיקת cooldown - אם עברו פחות מ-5 שניות מהסנכרון האחרון, דלג
+        const now = Date.now();
+        if (now - lastNetworkSyncTime < NETWORK_SYNC_COOLDOWN) {
+          console.log(`Network sync skipped - cooldown active (${Math.round((NETWORK_SYNC_COOLDOWN - (now - lastNetworkSyncTime)) / 1000)}s remaining)`);
+          return;
+        }
+
+        // עדכון זמן הסנכרון האחרון
+        setLastNetworkSyncTime(now);
+
         // בדיקה נוספת - אם המשחק נמחק בעבר, לא נסנכרן אותו
         const checkIfGameWasDeleted = async () => {
           try {
@@ -328,9 +342,10 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             return false;
           }
         };
-        
+
         checkIfGameWasDeleted().then(wasDeleted => {
           if (!wasDeleted) {
+            console.log('Network reconnected - syncing local game to Firestore');
             syncLocalActiveGameToFirestore()
               .then(gameId => {
                 if (gameId && gameId !== gameData.id) {
@@ -348,9 +363,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         });
       }
     });
-    
+
     return () => unsubscribe();
-  }, [isGameActive]);
+  }, [isGameActive, lastNetworkSyncTime]);
 
   // טעינת משחק פעיל בעת הפעלת האפליקציה
   useEffect(() => {
@@ -1085,44 +1100,63 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       if (saveTimeout) {
         clearTimeout(saveTimeout);
       }
-      
+
       // אם זה משחק חדש (אין מזהה), תן זמן מספיק לשמירה כדי למנוע כפילויות
       const debounceTime = gameData.id ? AUTO_SAVE_DEBOUNCE : 1000;
-      
+
+      // מעקב אחרי כל ה-timeouts שנוצרים כדי לנקות אותם
+      let statusResetTimeoutId: NodeJS.Timeout | null = null;
+      let isCancelled = false; // דגל לסימון ביטול
+
       // הגדרת טיימר חדש לשמירה מושהית
       const timeoutId = setTimeout(async () => {
+        // בדיקה אם הפעולה בוטלה
+        if (isCancelled) {
+          console.log('Auto-save cancelled: Component unmounted');
+          return;
+        }
+
         // בדיקה שהמשתמש מחובר בתחילת השמירה
         const userWasConnectedAtStart = !!auth.currentUser;
         if (!userWasConnectedAtStart) {
           console.log('Auto-save cancelled: User not authenticated at start');
-          setSaveStatus('idle');
+          if (!isCancelled) setSaveStatus('idle');
           return;
         }
-        
+
         try {
           // בדיקה נוספת שהמשחק עדיין פעיל
           if (!isGameActive || !needsSaving) {
             console.log('Auto-save cancelled: Game no longer active or does not need saving');
             return;
           }
-          
-          setSaveStatus('saving');
+
+          if (!isCancelled) setSaveStatus('saving');
           console.log(`Auto-save triggered for game ${gameData.id || 'new'} with status ${gameData.status}`);
-          
+
           // יצירת Promise לשמירה ומעקב אחריו
           const savePromise = saveActiveGame().then((savedGameId) => {
+            // בדיקה שהפעולה לא בוטלה
+            if (isCancelled) return;
+
             // בדיקה שהקומפוננט עדיין קיים לפני עדכון state
             if (setSaveStatus && setActiveSavePromise) {
               setSaveStatus('saved');
               setActiveSavePromise(null);
               console.log(`Auto-save completed successfully for game ${savedGameId}`);
-              
+
               // איפוס הסטטוס חזרה ל-idle אחרי 3 שניות
-              setTimeout(() => {
-                if (setSaveStatus) setSaveStatus('idle');
+              // שמירת ה-timeoutId כדי לנקות אותו בעת הצורך
+              statusResetTimeoutId = setTimeout(() => {
+                if (!isCancelled && setSaveStatus) {
+                  setSaveStatus('idle');
+                }
               }, 3000);
             }
           }).catch((error) => {
+            // בדיקה שהפעולה לא בוטלה
+            if (isCancelled) return;
+
             console.error('Error auto-saving game:', error);
             // בדיקה שהקומפוננט עדיין קיים לפני עדכון state
             if (setSaveStatus && setActiveSavePromise) {
@@ -1130,11 +1164,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
               setActiveSavePromise(null);
             }
           });
-          
-          setActiveSavePromise(savePromise);
+
+          if (!isCancelled) setActiveSavePromise(savePromise);
           await savePromise;
-          
+
         } catch (error) {
+          // בדיקה שהפעולה לא בוטלה
+          if (isCancelled) return;
+
           console.error('Error in auto-save process:', error);
           // בדיקה שהקומפוננט עדיין קיים
           if (setSaveStatus) {
@@ -1142,11 +1179,22 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       }, debounceTime);
-      
+
       setSaveTimeout(timeoutId);
-      
+
+      // פונקציית cleanup שמנקה את כל ה-timeouts
       return () => {
-        if (timeoutId) clearTimeout(timeoutId);
+        console.log('Auto-save useEffect cleanup: cancelling pending operations');
+        isCancelled = true; // סימון שהפעולה בוטלה
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        // ניקוי timeout של איפוס הסטטוס
+        if (statusResetTimeoutId) {
+          clearTimeout(statusResetTimeoutId);
+        }
       };
     }
   }, [isGameActive, isSaving, needsSaving]);
