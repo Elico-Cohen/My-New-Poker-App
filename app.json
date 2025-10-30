@@ -3,6 +3,7 @@
     "name": "MyNewPokerApp",
     "slug": "MyNewPokerApp",
     "version": "1.0.0",
+    "owner": "elico-cohen",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
