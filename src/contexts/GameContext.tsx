@@ -568,119 +568,121 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
       // Create a promise that we'll track to prevent concurrent saves
       const savePromise = (async (): Promise<string> => {
-        isSavingRef.current = true;
-        setIsSaving(true);
-
-        // בדיקה שהמשתמש מחובר לפני שמירה - אבל נאפשר המשך אם השמירה כבר התחילה
-        if (!auth.currentUser) {
-          throw new Error('המשתמש לא מחובר. יש להתחבר מחדש ולנסות שוב');
-        }
-      
-      console.log('User authenticated:', auth.currentUser.uid);
-      
-      // אם המשחק לא פעיל, הפעל אותו
-      if (!isGameActive) {
-        console.log('Activating game...');
-        setIsGameActive(true);
-      }
-      
-      // בדיקה חכמה האם באמת צריך לשמור
-      if (!hasLocalChanges(gameData) && gameData.id) {
-        console.log('No local changes detected, returning existing ID:', gameData.id);
-        return gameData.id;
-      }
-      
-      console.log('Converting game data for Firestore...');
-      // המרת הנתונים למבנה הנדרש לפיירבייס
-      const gameForFirestore = gameDataToGame(gameData);
-      console.log('Game for Firestore:', {
-        id: ('id' in gameForFirestore) ? gameForFirestore.id : 'NEW',
-        status: gameForFirestore.status,
-        createdBy: gameForFirestore.createdBy,
-        playersCount: gameForFirestore.players?.length
-      });
-      
-      console.log('Calling saveOrUpdateActiveGame...');
-      const gameId = await saveOrUpdateActiveGame(gameForFirestore, user?.id);
-      console.log('Received game ID from save:', gameId);
-      
-      // עדכון המזהה במשחק הפעיל אם זו שמירה ראשונה
-      if (!gameData.id) {
-        console.log('First time save - updating GameData with new ID');
-        const now = Date.now();
-        setGameData(prev => ({
-          ...prev,
-          id: gameId,
-          createdBy: prev.createdBy || user?.id, // וידוא שיש createdBy גם ב-GameData
-          createdAt: prev.createdAt || now,
-          updatedAt: now,
-          lastSyncAt: now,
-          syncVersion: 1
-        }));
-      } else {
-        // עדכון timestamps של סנכרון מוצלח
-        markSyncCompleted();
-      }
-      
-      console.log('Saving game ID to AsyncStorage...');
-      // שמירת המזהה ב-AsyncStorage
-      await AsyncStorage.setItem(ACTIVE_GAME_ID_KEY, gameId);
-      
-      // סימון שאין צורך בשמירה נוספת
-      setNeedsSaving(false);
-      
-      console.log('✅ Save active game completed successfully');
-      console.log('💾 === SAVE ACTIVE GAME ENDED === 💾');
-      return gameId;
-    } catch (error) {
-      console.error('Error saving active game:', error);
-      
-      // אם המשחק נמחק מהשרת, ננסה ליצור מסמך חדש אוטומטית
-      if (error instanceof Error && error.message && error.message.includes('No document to update')) {
-        console.log('Game was deleted from server during save, creating new document automatically');
-        
         try {
-          // נמחק את המזהה הישן כדי שייווצר מסמך חדש
-          const updatedGameData = { ...gameData };
-          delete updatedGameData.id;
-          
-          setGameData(updatedGameData);
-          setNeedsSaving(true); // יכריח שמירה מחדש עם מזהה חדש
-          
-          console.log('Game recreated automatically after server deletion');
-          return 'recreated'; // החזרת מזהה מיוחד לסימון שהמשחק נוצר מחדש
-        } catch (innerError) {
-          console.error('Error recreating game automatically:', innerError);
-          
-          // אם הטיפול האוטומטי נכשל, נציג הודעה למשתמש
-          Alert.alert(
-            "בעיית סנכרון",
-            "המשחק שלך לא סונכרן כראוי. האם ברצונך לנסות שוב?",
-            [
-              {
-                text: "נסה שוב",
-                onPress: async () => {
-                  setNeedsSaving(true);
-                }
-              },
-              {
-                text: "מחק את המשחק",
-                onPress: async () => {
-                  await clearActiveGame();
-                },
-                style: "destructive"
-              }
-            ]
-          );
-        }
-      }
+          isSavingRef.current = true;
+          setIsSaving(true);
 
-        throw error;
-      } finally {
-        isSavingRef.current = false;
-        activeSavePromiseRef.current = null;
-        setIsSaving(false);
-      }
+          // בדיקה שהמשתמש מחובר לפני שמירה - אבל נאפשר המשך אם השמירה כבר התחילה
+          if (!auth.currentUser) {
+            throw new Error('המשתמש לא מחובר. יש להתחבר מחדש ולנסות שוב');
+          }
+
+          console.log('User authenticated:', auth.currentUser.uid);
+
+          // אם המשחק לא פעיל, הפעל אותו
+          if (!isGameActive) {
+            console.log('Activating game...');
+            setIsGameActive(true);
+          }
+
+          // בדיקה חכמה האם באמת צריך לשמור
+          if (!hasLocalChanges(gameData) && gameData.id) {
+            console.log('No local changes detected, returning existing ID:', gameData.id);
+            return gameData.id;
+          }
+
+
+          console.log('Converting game data for Firestore...');
+          // המרת הנתונים למבנה הנדרש לפיירבייס
+          const gameForFirestore = gameDataToGame(gameData);
+          console.log('Game for Firestore:', {
+            id: ('id' in gameForFirestore) ? gameForFirestore.id : 'NEW',
+            status: gameForFirestore.status,
+            createdBy: gameForFirestore.createdBy,
+            playersCount: gameForFirestore.players?.length
+          });
+
+          console.log('Calling saveOrUpdateActiveGame...');
+          const gameId = await saveOrUpdateActiveGame(gameForFirestore, user?.id);
+          console.log('Received game ID from save:', gameId);
+
+          // עדכון המזהה במשחק הפעיל אם זו שמירה ראשונה
+          if (!gameData.id) {
+            console.log('First time save - updating GameData with new ID');
+            const now = Date.now();
+            setGameData(prev => ({
+              ...prev,
+              id: gameId,
+              createdBy: prev.createdBy || user?.id, // וידוא שיש createdBy גם ב-GameData
+              createdAt: prev.createdAt || now,
+              updatedAt: now,
+              lastSyncAt: now,
+              syncVersion: 1
+            }));
+          } else {
+            // עדכון timestamps של סנכרון מוצלח
+            markSyncCompleted();
+          }
+
+          console.log('Saving game ID to AsyncStorage...');
+          // שמירת המזהה ב-AsyncStorage
+          await AsyncStorage.setItem(ACTIVE_GAME_ID_KEY, gameId);
+
+          // סימון שאין צורך בשמירה נוספת
+          setNeedsSaving(false);
+
+          console.log('✅ Save active game completed successfully');
+          console.log('💾 === SAVE ACTIVE GAME ENDED === 💾');
+          return gameId;
+        } catch (error) {
+          console.error('Error saving active game:', error);
+
+          // אם המשחק נמחק מהשרת, ננסה ליצור מסמך חדש אוטומטית
+          if (error instanceof Error && error.message && error.message.includes('No document to update')) {
+            console.log('Game was deleted from server during save, creating new document automatically');
+
+            try {
+              // נמחק את המזהה הישן כדי שייווצר מסמך חדש
+              const updatedGameData = { ...gameData };
+              delete updatedGameData.id;
+
+              setGameData(updatedGameData);
+              setNeedsSaving(true); // יכריח שמירה מחדש עם מזהה חדש
+
+              console.log('Game recreated automatically after server deletion');
+              return 'recreated'; // החזרת מזהה מיוחד לסימון שהמשחק נוצר מחדש
+            } catch (innerError) {
+              console.error('Error recreating game automatically:', innerError);
+
+              // אם הטיפול האוטומטי נכשל, נציג הודעה למשתמש
+              Alert.alert(
+                "בעיית סנכרון",
+                "המשחק שלך לא סונכרן כראוי. האם ברצונך לנסות שוב?",
+                [
+                  {
+                    text: "נסה שוב",
+                    onPress: async () => {
+                      setNeedsSaving(true);
+                    }
+                  },
+                  {
+                    text: "מחק את המשחק",
+                    onPress: async () => {
+                      await clearActiveGame();
+                    },
+                    style: "destructive"
+                  }
+                ]
+              );
+            }
+          }
+
+          throw error;
+        } finally {
+          isSavingRef.current = false;
+          activeSavePromiseRef.current = null;
+          setIsSaving(false);
+        }
       })();
 
       // Track the promise to prevent concurrent saves
