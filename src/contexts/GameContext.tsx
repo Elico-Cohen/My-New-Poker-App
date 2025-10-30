@@ -242,13 +242,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
   const [needsSaving, setNeedsSaving] = useState<boolean>(false);
   const [activeSavePromise, setActiveSavePromise] = useState<Promise<void> | null>(null);
-  
+
   // Get user from AuthContext
   const { user } = useAuth();
 
   // מעקב אחרי זמן הסנכרון האחרון למניעת עומס - using ref to avoid recreating listener
   const lastNetworkSyncTimeRef = React.useRef<number>(0);
   const NETWORK_SYNC_COOLDOWN = 5000; // 5 שניות בין ניסיונות סנכרון
+
+  // Track active save operation with ref for better race condition handling
+  const activeSavePromiseRef = React.useRef<Promise<string> | null>(null);
+  const isSavingRef = React.useRef<boolean>(false);
 
   // Internal setGameData that doesn't update timestamps (for loading from server)
   const setGameDataInternal = useCallback((data: GameData | ((prevData: GameData) => GameData)) => {
@@ -547,26 +551,30 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       console.log('Needs saving:', needsSaving);
       console.log('Is game active:', isGameActive);
       
-      // הגנה נגד שמירות מקבילות
-      if (isSaving) {
+      // הגנה נגד שמירות מקבילות - using ref for immediate check
+      if (isSavingRef.current || isSaving) {
         console.log('Save already in progress, waiting for completion...');
-        if (activeSavePromise) {
-          const existingResult = await activeSavePromise;
-          return gameData.id || 'pending';
+        if (activeSavePromiseRef.current) {
+          console.log('Reusing existing save promise');
+          return await activeSavePromiseRef.current;
         }
         // אם אין promise פעיל אבל isSaving true, מחכים ומנסים שוב
         await new Promise(resolve => setTimeout(resolve, 100));
-        if (isSaving) {
-          throw new Error('Another save operation is already in progress');
+        if (isSavingRef.current) {
+          console.warn('Another save operation is still in progress after waiting');
+          return gameData.id || '';
         }
       }
-      
-      setIsSaving(true);
-      
-      // בדיקה שהמשתמש מחובר לפני שמירה - אבל נאפשר המשך אם השמירה כבר התחילה
-      if (!auth.currentUser) {
-        throw new Error('המשתמש לא מחובר. יש להתחבר מחדש ולנסות שוב');
-      }
+
+      // Create a promise that we'll track to prevent concurrent saves
+      const savePromise = (async (): Promise<string> => {
+        isSavingRef.current = true;
+        setIsSaving(true);
+
+        // בדיקה שהמשתמש מחובר לפני שמירה - אבל נאפשר המשך אם השמירה כבר התחילה
+        if (!auth.currentUser) {
+          throw new Error('המשתמש לא מחובר. יש להתחבר מחדש ולנסות שוב');
+        }
       
       console.log('User authenticated:', auth.currentUser.uid);
       
@@ -666,10 +674,22 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           );
         }
       }
-      
+
+        throw error;
+      } finally {
+        isSavingRef.current = false;
+        activeSavePromiseRef.current = null;
+        setIsSaving(false);
+      }
+      })();
+
+      // Track the promise to prevent concurrent saves
+      activeSavePromiseRef.current = savePromise;
+
+      return await savePromise;
+    } catch (error) {
+      console.error('Error in saveActiveGame wrapper:', error);
       throw error;
-    } finally {
-      setIsSaving(false);
     }
   };
 

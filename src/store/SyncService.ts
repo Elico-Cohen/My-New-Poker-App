@@ -434,19 +434,31 @@ class SyncService {
     if (this.pendingRetries.has(dataType)) {
       clearTimeout(this.pendingRetries.get(dataType));
     }
-    
+
     const retryTimeout = setTimeout(async () => {
       this.pendingRetries.delete(dataType);
-      
+
+      // בדיקה שהשירות עדיין מאותחל ויש משתמש מחובר
+      if (!this.isInitialized) {
+        console.log(`SyncService: ביטול ניסיון חוזר עבור ${dataType} - השירות לא מאותחל`);
+        return;
+      }
+
+      // בדיקה שהרשת זמינה
+      if (this.networkState !== NetworkState.ONLINE) {
+        console.log(`SyncService: ביטול ניסיון חוזר עבור ${dataType} - אין חיבור לרשת`);
+        return;
+      }
+
       // הודעה על ניסיון נוסף
       notificationService.notify({
         type: EventType.SYNC_STARTED,
         dataType,
         payload: { retry: true }
       });
-      
+
       console.log(`SyncService: מנסה שוב לטעון ${dataType}...`);
-      
+
       try {
         switch (dataType) {
           case 'users':
@@ -464,9 +476,10 @@ class SyncService {
         }
       } catch (error) {
         console.error(`SyncService: ניסיון חוזר נכשל עבור ${dataType}:`, error);
+        // Don't schedule another retry - will retry on next network reconnection
       }
     }, RETRY_DELAY);
-    
+
     this.pendingRetries.set(dataType, retryTimeout);
   }
   

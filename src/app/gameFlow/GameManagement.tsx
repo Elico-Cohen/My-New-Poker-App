@@ -165,14 +165,20 @@ export default function GameManagement() {
 
   // Keyboard Event Handlers
   useEffect(() => {
+    let isMounted = true;
+
     const keyboardWillShow = (e: KeyboardEvent) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      setKeyboardVisible(true);
+      if (isMounted) {
+        setKeyboardHeight(e.endCoordinates.height);
+        setKeyboardVisible(true);
+      }
     };
 
     const keyboardWillHide = () => {
-      setKeyboardHeight(0);
-      setKeyboardVisible(false);
+      if (isMounted) {
+        setKeyboardHeight(0);
+        setKeyboardVisible(false);
+      }
     };
 
     const showSubscription = Keyboard.addListener(
@@ -185,6 +191,8 @@ export default function GameManagement() {
     );
 
     return () => {
+      console.log('GameManagement: Cleaning up keyboard listeners');
+      isMounted = false;
       showSubscription.remove();
       hideSubscription.remove();
     };
@@ -192,15 +200,21 @@ export default function GameManagement() {
 
   // Back Handler
   useEffect(() => {
+    const handleBackPress = () => {
+      setShowExitDialog(true);
+      return true; // Prevent default back behavior
+    };
+
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
-      () => {
-        setShowExitDialog(true);
-        return true;
-      }
+      handleBackPress
     );
-    return () => backHandler.remove();
-  }, []);
+
+    return () => {
+      console.log('GameManagement: Cleaning up BackHandler');
+      backHandler.remove();
+    };
+  }, []); // Empty deps is correct - we use setState which is always stable
 
   // Player Management Functions
   const loadAvailablePlayers = async () => {
