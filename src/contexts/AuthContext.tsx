@@ -94,7 +94,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   // Initialize auth state
   useEffect(() => {
+    let isMounted = true; // Track if component is still mounted
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Check if component is still mounted
+      if (!isMounted) {
+        console.log('AuthContext: Component unmounted, skipping auth state change');
+        return;
+      }
+
       // מניעת עיבוד במקרה של התנתקות פעילה
       if (isSigningOut) {
         console.log('AuthContext: התנתקות פעילה, מדלג על onAuthStateChanged');
@@ -251,46 +259,60 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // במקרה של שגיאת הרשאות, לא נתנתק - רק נראה הודעת שגיאה
             if (firestoreError.toString().includes('Missing or insufficient permissions')) {
               console.log('AuthContext: שגיאת הרשאות - לא מתנתק, מחכה לרשת');
-              setError('בעיית חיבור לשרת. מנסה שוב...');
+              if (isMounted) {
+                setError('בעיית חיבור לשרת. מנסה שוב...');
+              }
               // נותן זמן לרשת להתחבר ולא מתנתק
               setTimeout(() => {
-                if (error && error.includes('בעיית חיבור לשרת')) {
+                if (isMounted && error && error.includes('בעיית חיבור לשרת')) {
                   setError(null);
                 }
               }, 5000);
             } else {
               // Generic error, log out user
-              setIsSigningOut(true);
-              await signOut(auth);
-              setUser(null);
-              setError('שגיאה בגישה למידע המשתמש. אנא נסה מאוחר יותר.');
-              setIsSigningOut(false);
+              if (isMounted) {
+                setIsSigningOut(true);
+                await signOut(auth);
+                setUser(null);
+                setError('שגיאה בגישה למידע המשתמש. אנא נסה מאוחר יותר.');
+                setIsSigningOut(false);
+              }
             }
           }
         } else {
           console.log('AuthContext: אין משתמש מחובר, מנקה נתונים');
-          setUser(null);
+          if (isMounted) {
+            setUser(null);
+          }
           syncService.cleanup();
           await AsyncStorage.removeItem(AUTH_SESSION_KEY);
         }
       } catch (err) {
         console.error('AuthContext: Error in onAuthStateChanged:', err);
-        setError('שגיאה בטעינת פרופיל משתמש');
-        setUser(null);
+        if (isMounted) {
+          setError('שגיאה בטעינת פרופיל משתמש');
+          setUser(null);
+        }
         // Ensure sign out if there's an unexpected error, but avoid circular calls
-        if (auth.currentUser && !isSigningOut) {
+        if (auth.currentUser && !isSigningOut && isMounted) {
             setIsSigningOut(true);
             await signOut(auth);
             setIsSigningOut(false);
         }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     });
-    
+
     // Cleanup subscription
-    return () => unsubscribe();
-  }, []); // תיקון: הסרת dependency שגרמה לבעיות בהתנתקות
+    return () => {
+      console.log('AuthContext: Cleaning up auth state listener');
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []); // Empty dependency array - only run once on mount
   
   // Clear error
   const clearError = () => {

@@ -4,20 +4,94 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
-import { TouchableOpacity, Text, View } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
 import { GameProvider } from '@/contexts/GameContext';
 import { useColorScheme } from '../../src/components/useColorScheme';
 import Colors from '@/theme/colors';
 import { migrateGameDates } from '@/services/migrations';
-import { router } from 'expo-router';
-import { useState, useEffect } from 'react';
 import Toast from 'react-native-toast-message';
 
 export {
   // Catch any errors thrown by the Layout component.
   ErrorBoundary,
 } from 'expo-router';
+
+// Custom Error Boundary Component
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('AppErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={errorStyles.container}>
+          <Text style={errorStyles.title}>אופס! משהו השתבש</Text>
+          <Text style={errorStyles.message}>
+            {this.state.error?.message || 'אירעה שגיאה בלתי צפויה'}
+          </Text>
+          <TouchableOpacity style={errorStyles.button} onPress={this.resetError}>
+            <Text style={errorStyles.buttonText}>נסה שוב</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const errorStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0D1B1E',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    color: '#FFD700',
+    marginBottom: 20,
+    fontWeight: 'bold',
+  },
+  message: {
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  button: {
+    backgroundColor: '#35654d',
+    paddingHorizontal: 40,
+    paddingVertical: 15,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+});
 
 export const unstable_settings = {
   // הגדרות יציבות יותר למערכת הניווט
@@ -73,13 +147,15 @@ export default function RootLayout() {
     return null;
   }
 
-  // Wrap the entire app with AuthProvider and GameProvider
+  // Wrap the entire app with ErrorBoundary, AuthProvider and GameProvider
   return (
-    <AuthProvider>
-      <GameProvider>
-      <RootLayoutNav />
-      </GameProvider>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <GameProvider>
+          <RootLayoutNav />
+        </GameProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
 

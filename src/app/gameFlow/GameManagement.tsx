@@ -1,5 +1,5 @@
 // src/app/gameFlow/GameManagement.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -150,6 +150,19 @@ export default function GameManagement() {
   const [newPlayerEmailError, setNewPlayerEmailError] = useState<string | null>(null);
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
 
+  // Ref to track pending timeouts for cleanup
+  const playerDialogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (playerDialogTimeoutRef.current) {
+        clearTimeout(playerDialogTimeoutRef.current);
+        console.log('GameManagement: Cleaned up player dialog timeout on unmount');
+      }
+    };
+  }, []);
+
   // Keyboard Event Handlers
   useEffect(() => {
     const keyboardWillShow = (e: KeyboardEvent) => {
@@ -297,14 +310,20 @@ export default function GameManagement() {
       // Check if email was provided to show appropriate message
       if (newPlayerData.email.trim()) {
         setNewPlayerError('✅ השחקן נוצר בהצלחה עם אימייל! המערכת תתנתק אוטומטית כדי לשמור על אבטחת המערכת. תוכל להתחבר מחדש כאדמין תוך כמה שניות.');
-        
+
+        // Clear any existing timeout
+        if (playerDialogTimeoutRef.current) {
+          clearTimeout(playerDialogTimeoutRef.current);
+        }
+
         // Close dialog after showing success message
-        setTimeout(() => {
+        playerDialogTimeoutRef.current = setTimeout(() => {
           setNewPlayerData({ name: '', phone: '', email: '' });
-      setNewPlayerError(null);
+          setNewPlayerError(null);
           setNewPlayerEmailError(null);
-      setShowNewPlayerDialog(false);
-      setShowAddPlayerDialog(false);
+          setShowNewPlayerDialog(false);
+          setShowAddPlayerDialog(false);
+          playerDialogTimeoutRef.current = null;
         }, 3000);
       } else {
         // Regular success for player without email

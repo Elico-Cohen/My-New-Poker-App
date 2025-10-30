@@ -246,8 +246,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   // Get user from AuthContext
   const { user } = useAuth();
 
-  // מעקב אחרי זמן הסנכרון האחרון למניעת עומס
-  const [lastNetworkSyncTime, setLastNetworkSyncTime] = useState<number>(0);
+  // מעקב אחרי זמן הסנכרון האחרון למניעת עומס - using ref to avoid recreating listener
+  const lastNetworkSyncTimeRef = React.useRef<number>(0);
   const NETWORK_SYNC_COOLDOWN = 5000; // 5 שניות בין ניסיונות סנכרון
 
   // Internal setGameData that doesn't update timestamps (for loading from server)
@@ -317,13 +317,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       if (connected && isGameActive && auth.currentUser && gameData.status !== 'completed') {
         // בדיקת cooldown - אם עברו פחות מ-5 שניות מהסנכרון האחרון, דלג
         const now = Date.now();
-        if (now - lastNetworkSyncTime < NETWORK_SYNC_COOLDOWN) {
-          console.log(`Network sync skipped - cooldown active (${Math.round((NETWORK_SYNC_COOLDOWN - (now - lastNetworkSyncTime)) / 1000)}s remaining)`);
+        if (now - lastNetworkSyncTimeRef.current < NETWORK_SYNC_COOLDOWN) {
+          console.log(`Network sync skipped - cooldown active (${Math.round((NETWORK_SYNC_COOLDOWN - (now - lastNetworkSyncTimeRef.current)) / 1000)}s remaining)`);
           return;
         }
 
         // עדכון זמן הסנכרון האחרון
-        setLastNetworkSyncTime(now);
+        lastNetworkSyncTimeRef.current = now;
 
         // בדיקה נוספת - אם המשחק נמחק בעבר, לא נסנכרן אותו
         const checkIfGameWasDeleted = async () => {
@@ -343,29 +343,40 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           }
         };
 
-        checkIfGameWasDeleted().then(wasDeleted => {
-          if (!wasDeleted) {
-            console.log('Network reconnected - syncing local game to Firestore');
-            syncLocalActiveGameToFirestore()
-              .then(gameId => {
-                if (gameId && gameId !== gameData.id) {
-                  // אם התקבל מזהה חדש, נעדכן את המזהה במשחק הפעיל
-                  setGameData(prev => ({
-                    ...prev,
-                    id: gameId
-                  }));
-                }
-              })
-              .catch(error => {
-                console.error('Error syncing local game to Firestore:', error);
-              });
-          }
-        });
+        checkIfGameWasDeleted()
+          .then(wasDeleted => {
+            if (!wasDeleted) {
+              console.log('Network reconnected - syncing local game to Firestore');
+              return syncLocalActiveGameToFirestore()
+                .then(gameId => {
+                  if (gameId && gameId !== gameData.id) {
+                    // אם התקבל מזהה חדש, נעדכן את המזהה במשחק הפעיל
+                    setGameData(prev => ({
+                      ...prev,
+                      id: gameId
+                    }));
+                  }
+                  console.log('Network sync completed successfully');
+                })
+                .catch(error => {
+                  console.error('Error syncing local game to Firestore:', error);
+                  // Don't throw - game is still saved locally
+                  // Will retry on next network reconnection
+                });
+            }
+          })
+          .catch(error => {
+            console.error('Error checking if game was deleted:', error);
+            // Non-critical error, continue without syncing
+          });
       }
     });
 
-    return () => unsubscribe();
-  }, [isGameActive, lastNetworkSyncTime]);
+    return () => {
+      console.log('GameContext: Cleaning up NetInfo listener');
+      unsubscribe();
+    };
+  }, [isGameActive]); // Removed lastNetworkSyncTime - using ref instead
 
   // טעינת משחק פעיל בעת הפעלת האפליקציה
   useEffect(() => {
