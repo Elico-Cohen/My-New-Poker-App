@@ -14,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.elicohen.mynewpokerapp",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.elicohen.mynewpokerapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
