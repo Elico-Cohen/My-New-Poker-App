@@ -32,7 +32,7 @@
     },
     "plugins": [
       "expo-router",
-      "./plugins/withRTL"
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
@@ -43,7 +43,9 @@
       },
       "eas": {
         "projectId": "6ac32d81-783d-4234-9063-b9533a13d8aa"
-      }
+      },
+      "supportsRTL": true,
+      "forcesRTL": true
     }
   }
 }

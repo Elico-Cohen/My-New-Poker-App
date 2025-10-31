@@ -1136,6 +1136,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // שמור רק אם המשחק פעיל, צריך שמירה, לא נמצא כרגע בתהליך שמירה
     if (isGameActive && needsSaving && !isSaving) {
+      // Check if there's already an active save using the ref (more reliable than state)
+      if (isSavingRef.current || activeSavePromiseRef.current) {
+        console.log('Auto-save: Save already in progress, skipping');
+        return;
+      }
+
       // ביטול טיימר קודם אם יש
       if (saveTimeout) {
         clearTimeout(saveTimeout);
@@ -1158,6 +1164,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         // בדיקה אם הפעולה בוטלה
         if (isCancelled) {
           console.log('Auto-save cancelled: Component unmounted');
+          setSaveStatus('idle');
           return;
         }
 
@@ -1231,11 +1238,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
       // פונקציית cleanup שמנקה את כל ה-timeouts
       return () => {
-        console.log('Auto-save useEffect cleanup: cancelling pending operations');
-        isCancelled = true; // סימון שהפעולה בוטלה
+        console.log('Auto-save useEffect cleanup: clearing debounce timeout only');
 
-        if (timeoutId) {
+        // Only cancel if the save hasn't started yet (timeoutId not yet fired)
+        // If the save is already in progress (activeSavePromiseRef.current exists), let it complete
+        if (timeoutId && !activeSavePromiseRef.current) {
+          console.log('Auto-save useEffect cleanup: cancelling debounce timeout');
           clearTimeout(timeoutId);
+          isCancelled = true;
+        } else if (activeSavePromiseRef.current) {
+          console.log('Auto-save useEffect cleanup: save in progress, letting it complete');
+          // Don't set isCancelled - let the save complete naturally
         }
 
         // DON'T clear statusResetTimeoutRef here!
