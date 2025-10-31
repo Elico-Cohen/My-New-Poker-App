@@ -836,7 +836,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         clearTimeout(saveTimeout);
         setSaveTimeout(null);
       }
-      
+
+      // Clear status reset timeout
+      if (statusResetTimeoutRef.current) {
+        clearTimeout(statusResetTimeoutRef.current);
+        statusResetTimeoutRef.current = null;
+      }
+
       // המתנה לסיום שמירות פעילות
       if (activeSavePromise) {
         console.log('clearActiveGame: Waiting for active save to complete');
@@ -1232,11 +1238,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           clearTimeout(timeoutId);
         }
 
-        // ניקוי timeout של איפוס הסטטוס from ref
-        if (statusResetTimeoutRef.current) {
-          clearTimeout(statusResetTimeoutRef.current);
-          statusResetTimeoutRef.current = null;
-        }
+        // DON'T clear statusResetTimeoutRef here!
+        // The status reset timeout should complete even if useEffect re-runs
+        // It will be cleared when it finishes, or when clearActiveGame is called
       };
     }
   }, [isGameActive, isSaving, needsSaving]);
