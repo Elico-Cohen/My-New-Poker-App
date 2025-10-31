@@ -4,7 +4,11 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
-import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet, I18nManager } from 'react-native';
+
+// Force RTL layout for Hebrew
+I18nManager.allowRTL(true);
+I18nManager.forceRTL(true);
 import { useAuth, AuthProvider } from '@/contexts/AuthContext';
 import { GameProvider } from '@/contexts/GameContext';
 import { useColorScheme } from '../../src/components/useColorScheme';
