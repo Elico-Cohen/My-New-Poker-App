@@ -253,6 +253,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   // Track active save operation with ref for better race condition handling
   const activeSavePromiseRef = React.useRef<Promise<string> | null>(null);
   const isSavingRef = React.useRef<boolean>(false);
+  const statusResetTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Internal setGameData that doesn't update timestamps (for loading from server)
   const setGameDataInternal = useCallback((data: GameData | ((prevData: GameData) => GameData)) => {
@@ -1138,7 +1139,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       const debounceTime = gameData.id ? AUTO_SAVE_DEBOUNCE : 1000;
 
       // מעקב אחרי כל ה-timeouts שנוצרים כדי לנקות אותם
-      let statusResetTimeoutId: NodeJS.Timeout | null = null;
+      // Clear any existing status reset timeout
+      if (statusResetTimeoutRef.current) {
+        clearTimeout(statusResetTimeoutRef.current);
+        statusResetTimeoutRef.current = null;
+      }
+
       let isCancelled = false; // דגל לסימון ביטול
 
       // הגדרת טיימר חדש לשמירה מושהית
@@ -1179,11 +1185,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
               console.log(`Auto-save completed successfully for game ${savedGameId}`);
 
               // איפוס הסטטוס חזרה ל-idle אחרי 3 שניות
-              // שמירת ה-timeoutId כדי לנקות אותו בעת הצורך
-              statusResetTimeoutId = setTimeout(() => {
+              // שמירת ה-timeoutId בref כדי לנקות אותו בעת הצורך
+              statusResetTimeoutRef.current = setTimeout(() => {
                 if (!isCancelled && setSaveStatus) {
                   setSaveStatus('idle');
+                  console.log('Auto-save status reset to idle after 3 seconds');
                 }
+                statusResetTimeoutRef.current = null;
               }, 3000);
             }
           }).catch((error) => {
@@ -1224,9 +1232,10 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           clearTimeout(timeoutId);
         }
 
-        // ניקוי timeout של איפוס הסטטוס
-        if (statusResetTimeoutId) {
-          clearTimeout(statusResetTimeoutId);
+        // ניקוי timeout של איפוס הסטטוס from ref
+        if (statusResetTimeoutRef.current) {
+          clearTimeout(statusResetTimeoutRef.current);
+          statusResetTimeoutRef.current = null;
         }
       };
     }
