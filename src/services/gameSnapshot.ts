@@ -91,24 +91,24 @@ function cleanUndefinedValues(obj: any, preserveUndefinedFields: string[] = []):
  * הפונקציה מוסיפה את השדות createdAt, updatedAt, וגם createdBy (מזהה המשתמש) ושומרת את המסמך.
  * מחזירה את המזהה (id) של המסמך שנוצר.
  */
-export async function saveGameSnapshot(game: Omit<Game, 'id'>, userId?: string): Promise<string> {
+export async function saveGameSnapshot(game: Omit<Game, 'id'>): Promise<string> {
   const now = Date.now();
   const currentUser = auth.currentUser;
-  
+
   if (!currentUser) {
     console.error('No authenticated user found when trying to save game!');
     throw new Error('המשתמש לא מחובר. יש להתחבר מחדש ולנסות שוב');
   }
-  
+
   console.log('Saving game with authenticated user:', currentUser.uid);
   console.log('User email:', currentUser.email);
-  
-  // הכנת הנתונים לשמירה - השתמש ב-userId אם סופק, אחרת ב-currentUser.uid
+
+  // הכנת הנתונים לשמירה - תמיד השתמש ב-currentUser.uid (authUid), לא ב-Firestore user ID
   const gameData = cleanUndefinedValues({
     ...game,
     createdAt: now,
     updatedAt: now,
-    createdBy: userId || currentUser.uid,
+    createdBy: currentUser.uid, // Always use Firebase Auth UID (authUid)
   }, ['remainingChips', 'exactChipsValue', 'roundedRebuysCount', 'resultBeforeOpenGames', 'openGameWins', 'finalResultMoney', 'finalResult']);
   
   try {
@@ -146,11 +146,10 @@ export async function saveGameSnapshot(game: Omit<Game, 'id'>, userId?: string):
  * במקרה של אין חיבור לאינטרנט, המשחק יישמר מקומית.
  * הפונקציה מחזירה את מזהה המשחק.
  */
-export async function saveOrUpdateActiveGame(game: Game | Omit<Game, 'id'>, userId?: string): Promise<string> {
+export async function saveOrUpdateActiveGame(game: Game | Omit<Game, 'id'>): Promise<string> {
   console.log('🔧 === SAVE OR UPDATE ACTIVE GAME STARTED === 🔧');
   console.log('Game has ID:', 'id' in game ? game.id : 'NO ID - NEW GAME');
   console.log('Game status:', game.status);
-  console.log('Provided userId:', userId || 'not provided');
   
   const now = Date.now();
   const currentUser = auth.currentUser;
@@ -172,12 +171,12 @@ export async function saveOrUpdateActiveGame(game: Game | Omit<Game, 'id'>, user
     ...game,
     updatedAt: now,
   }, ['remainingChips', 'exactChipsValue', 'roundedRebuysCount', 'resultBeforeOpenGames', 'openGameWins', 'finalResultMoney', 'finalResult']) as any;
-    
-  // אם זה משחק חדש, הוסף מטה-נתונים - השתמש ב-userId אם סופק
+
+  // אם זה משחק חדש, הוסף מטה-נתונים
   if (!('id' in game) || !game.id) {
     console.log('New game - adding metadata');
     gameToSave.createdAt = now;
-    gameToSave.createdBy = userId || currentUser.uid;
+    gameToSave.createdBy = currentUser.uid; // Always use Firebase Auth UID (authUid)
     console.log('Set createdBy to:', gameToSave.createdBy);
   } else {
     console.log('Existing game - updating game ID:', game.id);

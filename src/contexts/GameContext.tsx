@@ -477,8 +477,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       updatedAt: rest.updatedAt || now,
       useRoundingRule: rest.useRoundingRule,
       roundingRulePercentage: rest.roundingRulePercentage,
-      // וידוא שיש createdBy - אם לא, השתמש במשתמש הנוכחי
-      createdBy: rest.createdBy || user?.id || auth.currentUser?.uid
+      // וידוא שיש createdBy - אם לא, השתמש ב-authUid של המשתמש הנוכחי
+      createdBy: rest.createdBy || user?.authUid || auth.currentUser?.uid
     };
     
     if (data.id) {
@@ -604,7 +604,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           });
 
           console.log('Calling saveOrUpdateActiveGame...');
-          const gameId = await saveOrUpdateActiveGame(gameForFirestore, user?.id);
+          const gameId = await saveOrUpdateActiveGame(gameForFirestore);
           console.log('Received game ID from save:', gameId);
 
           // עדכון המזהה במשחק הפעיל אם זו שמירה ראשונה
@@ -614,7 +614,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             setGameData(prev => ({
               ...prev,
               id: gameId,
-              createdBy: prev.createdBy || user?.id, // וידוא שיש createdBy גם ב-GameData
+              createdBy: prev.createdBy || user?.authUid, // Use authUid, not Firestore user ID
               createdAt: prev.createdAt || now,
               updatedAt: now,
               lastSyncAt: now,
@@ -992,17 +992,18 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     
     // אדמין יכול להמשיך כל משחק
     if (user.role === 'admin') return true;
-    
+
     // סופר יוזר יכול להמשיך רק משחקים שהוא יצר
-    if (user.role === 'super' && gameData.createdBy === user.id) return true;
-    
+    // Compare with authUid (which is stored in createdBy), not Firestore user.id
+    if (user.role === 'super' && gameData.createdBy === user.authUid) return true;
+
     // מקרה מיוחד: אם המשחק נמצא על ידי fallback search (אותו אימייל, UID שונה)
     // ואנחנו יודעים שהמשתמש הנוכחי הוא זה שיצר את המשחק
-    if (user.role === 'super' && gameData.createdBy && gameData.createdBy !== user.id) {
+    if (user.role === 'super' && gameData.createdBy && gameData.createdBy !== user.authUid) {
       // אם המשחק הגיע דרך מנגנון ה-fallback, זה אומר שהוא של אותו משתמש
       // (כי ה-fallback מתבסס על השוואת אימיילים)
       console.log(`canUserContinueThisGame: Detected fallback-loaded game - allowing continuation`);
-      console.log(`canUserContinueThisGame: Original creator: ${gameData.createdBy}, Current user: ${user.id}`);
+      console.log(`canUserContinueThisGame: Original creator: ${gameData.createdBy}, Current user authUid: ${user.authUid}`);
       return true;
     }
     

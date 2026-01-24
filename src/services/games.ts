@@ -21,8 +21,7 @@ const gamesCollection = collection(db, 'games');
 // Create a new game
 export const createGame = async (
   groupId: string,
-  date: GameDate,
-  userId?: string
+  date: GameDate
 ): Promise<string> => {
   const group = await getGroupById(groupId);
   if (!group) throw new Error('Group not found');
@@ -71,7 +70,7 @@ export const createGame = async (
     rebuyLogs: [],
     createdAt: now,
     updatedAt: now,
-    createdBy: userId || currentUser.uid,
+    createdBy: currentUser.uid, // Always use Firebase Auth UID (authUid), not Firestore user ID
     // העברת נתוני חוק 80% מהקבוצה – הערכים הללו קיימים במסמך הקבוצה (Group)
     useRoundingRule: group.useRoundingRule,
     roundingRulePercentage: group.roundingRulePercentage || 0,

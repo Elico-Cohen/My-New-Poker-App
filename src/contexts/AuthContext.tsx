@@ -618,13 +618,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check if user can manage a specific game
   const canManageGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
     if (!user) return false;
-    
+
     // Admin can manage any game
     if (user.role === 'admin') return true;
-    
+
     // Super user can manage only games they created
-    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
-    
+    // Compare with authUid (createdBy stores authUid, not Firestore user.id)
+    if (user.role === 'super' && gameData?.createdBy === user.authUid) return true;
+
     // Regular users cannot manage games
     return false;
   };
@@ -632,27 +633,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check if user can delete active games
   const canDeleteActiveGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
     if (!user) return false;
-    
+
     // Admin can delete any game
     if (user.role === 'admin') return true;
-    
+
     // Super user can delete only active games they created
-    if (user.role === 'super' && 
-        gameData?.createdBy === user.id && 
+    // Compare with authUid (createdBy stores authUid, not Firestore user.id)
+    if (user.role === 'super' &&
+        gameData?.createdBy === user.authUid &&
         gameData?.status !== 'completed') {
       return true;
     }
-    
+
     // Additional check for UID mismatch cases (same as canContinueGame)
-    if (user.role === 'super' && 
-        gameData?.createdBy && 
-        gameData.createdBy !== user.id && 
+    // This handles legacy games or fallback scenarios
+    if (user.role === 'super' &&
+        gameData?.createdBy &&
+        gameData.createdBy !== user.authUid &&
         gameData?.status !== 'completed') {
-      console.log(`canDeleteActiveGame: Different UID detected - ${gameData.createdBy} vs ${user.id}`);
+      console.log(`canDeleteActiveGame: Different UID detected - ${gameData.createdBy} vs ${user.authUid}`);
       console.log(`canDeleteActiveGame: Allowing super user to potentially delete (will be validated in game loading)`);
       return true;
     }
-    
+
     // Regular users cannot delete games
     return false;
   };
@@ -670,37 +673,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // New permission functions for game management
   const canContinueGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
     if (!user) return false;
-    
+
     // Admin can continue any game
     if (user.role === 'admin') return true;
-    
+
     // Super user can continue only games they created
-    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
+    // Compare with authUid (createdBy stores authUid, not Firestore user.id)
+    if (user.role === 'super' && gameData?.createdBy === user.authUid) return true;
     
     // Additional check: if user email matches the creator's email (for UID mismatch cases)
     // This handles the case where Firebase Auth generated different UIDs for the same user
-    if (user.role === 'super' && gameData?.createdBy && gameData.createdBy !== user.id) {
+    if (user.role === 'super' && gameData?.createdBy && gameData.createdBy !== user.authUid) {
       // Note: This additional check would require access to user profiles
       // For now, we'll let the game loading logic handle this through the fallback search
-      console.log(`canContinueGame: Different UID detected - ${gameData.createdBy} vs ${user.id}`);
+      console.log(`canContinueGame: Different UID detected - ${gameData.createdBy} vs ${user.authUid}`);
       console.log(`canContinueGame: Allowing super user to potentially continue (will be validated in game loading)`);
       // Temporarily allow super users to attempt continuation - the actual validation happens in game loading
       return true;
     }
-    
+
     // Regular users cannot continue games
     return false;
   };
-  
+
   const canAddPlayerToGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
     if (!user) return false;
-    
+
     // Admin can add player to any game
     if (user.role === 'admin') return true;
-    
+
     // Super user can add player to only games they created
-    if (user.role === 'super' && gameData?.createdBy === user.id) return true;
-    
+    // Compare with authUid (createdBy stores authUid, not Firestore user.id)
+    if (user.role === 'super' && gameData?.createdBy === user.authUid) return true;
+
     // Regular users cannot add player to games
     return false;
   };
