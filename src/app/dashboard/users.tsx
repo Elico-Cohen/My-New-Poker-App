@@ -10,14 +10,18 @@ import { LoadingIndicator } from '@/components/common/LoadingIndicator';
 import { DeleteConfirmation } from '@/components/dashboard/DeleteConfirmation';
 import { NewUserDialog } from '@/components/dashboard/NewUserDialog';
 import { EditUserDialog } from '@/components/dashboard/EditUserDialog';
+import { RoleChangeConfirmation } from '@/components/dashboard/RoleChangeConfirmation';
+import { UserRoleSelector } from '@/components/UserRoleSelector';
 import _ from 'lodash';
-import { UserProfile } from '@/models/UserProfile';
+import { UserProfile, UserRole } from '@/models/UserProfile';
 import { Group } from '@/models/Group';
 import { PaymentUnit } from '@/models/PaymentUnit';
 import { getAllUsers, deleteUser, updateUser } from '@/services/users';
 import { getAllActiveGroups, updateGroup } from '@/services/groups';
 import { getAllActivePaymentUnits, updatePaymentUnit } from '@/services/paymentUnits';
 import { hasPlayerActiveGames } from '@/services/games';
+import { updateUserRole } from '@/services/userManagement';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Enable RTL
 I18nManager.forceRTL(true);
@@ -45,11 +49,14 @@ interface UserDetails extends UserProfile {
 }
 
 export default function UsersScreen() {
+  // Get current user from auth context
+  const { user: currentUser } = useAuth();
+
   // מצבי נתונים
   const [users, setUsers] = React.useState<UserDetails[]>([]);
   const [groups, setGroups] = React.useState<Group[]>([]);
   const [paymentUnits, setPaymentUnits] = React.useState<PaymentUnit[]>([]);
-  
+
   // מצבי UI
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -63,6 +70,11 @@ export default function UsersScreen() {
   const [showNewUserDialog, setShowNewUserDialog] = React.useState(false);
   const [showEditDialog, setShowEditDialog] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<UserDetails | null>(null);
+
+  // Role change states
+  const [showRoleChangeDialog, setShowRoleChangeDialog] = React.useState(false);
+  const [roleChangeUser, setRoleChangeUser] = React.useState<UserDetails | null>(null);
+  const [newRole, setNewRole] = React.useState<UserRole | null>(null);
 
   React.useEffect(() => {
     loadData();
@@ -200,13 +212,13 @@ export default function UsersScreen() {
   ) => {
     try {
       setLoading(true);
-      
+
       const group = groups.find(g => g.id === groupId);
       if (!group) throw new Error('הקבוצה לא נמצאה');
 
       const updatedGroup = {
         ...group,
-        permanentPlayers: newIsPermanent 
+        permanentPlayers: newIsPermanent
           ? [...group.permanentPlayers, userId]
           : group.permanentPlayers.filter(id => id !== userId),
         guestPlayers: newIsPermanent
@@ -223,6 +235,63 @@ export default function UsersScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRoleChangeRequest = (user: UserDetails, role: UserRole) => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      setError('רק מנהל יכול לשנות תפקידים');
+      return;
+    }
+
+    if (user.id === currentUser.id) {
+      setError('לא ניתן לשנות את התפקיד שלך');
+      return;
+    }
+
+    setRoleChangeUser(user);
+    setNewRole(role);
+    setShowRoleChangeDialog(true);
+  };
+
+  const handleRoleChangeConfirm = async () => {
+    if (!roleChangeUser || !newRole || !currentUser) return;
+
+    try {
+      setLoading(true);
+      setShowRoleChangeDialog(false);
+
+      // Optimistic update
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === roleChangeUser.id ? { ...u, role: newRole } : u
+        )
+      );
+
+      // Call service to update role
+      await updateUserRole({
+        userId: roleChangeUser.id,
+        newRole,
+        updatedBy: currentUser.id
+      });
+
+      console.log('Role updated successfully');
+    } catch (error: any) {
+      console.error('Failed to update user role:', error);
+      setError(error.message || 'שגיאה בעדכון התפקיד');
+
+      // Revert optimistic update on error
+      await loadData();
+    } finally {
+      setRoleChangeUser(null);
+      setNewRole(null);
+      setLoading(false);
+    }
+  };
+
+  const handleRoleChangeCancel = () => {
+    setShowRoleChangeDialog(false);
+    setRoleChangeUser(null);
+    setNewRole(null);
   };
 
   // סינון ומיון משתמשים לפי שם וקבוצה
@@ -263,20 +332,52 @@ export default function UsersScreen() {
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: CASINO_COLORS.gold, fontSize: 18 }}>{user.name}</Text>
+              {/* Role Badge */}
+              <View style={{
+                flexDirection: 'row-reverse',
+                alignItems: 'center',
+                backgroundColor: user.role === 'admin' ? 'rgba(255, 215, 0, 0.2)'
+                             : user.role === 'super' ? 'rgba(53, 101, 77, 0.3)'
+                             : 'rgba(136, 136, 136, 0.2)',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: user.role === 'admin' ? CASINO_COLORS.gold
+                           : user.role === 'super' ? CASINO_COLORS.primary
+                           : '#888'
+              }}>
+                <Icon
+                  name={user.role === 'admin' ? 'crown' : user.role === 'super' ? 'star' : 'account'}
+                  size="tiny"
+                  color={user.role === 'admin' ? CASINO_COLORS.gold
+                       : user.role === 'super' ? CASINO_COLORS.primary
+                       : '#888'}
+                />
+                <Text style={{
+                  fontSize: 12,
+                  marginRight: 4,
+                  color: user.role === 'admin' ? CASINO_COLORS.gold
+                       : user.role === 'super' ? CASINO_COLORS.primary
+                       : '#888'
+                }}>
+                  {user.role === 'admin' ? 'מנהל' : user.role === 'super' ? 'על' : 'רגיל'}
+                </Text>
+              </View>
+              {/* Active Status Indicator */}
               <View style={{
                 width: 8,
                 height: 8,
                 borderRadius: 4,
                 backgroundColor: user.isActive ? '#22c55e' : '#ef4444',
-                marginRight: 8
               }} />
             </View>
-            <Icon 
-              name={isExpanded ? "chevron-up" : "chevron-down"} 
-              size="small" 
-              color={CASINO_COLORS.gold} 
+            <Icon
+              name={isExpanded ? "chevron-up" : "chevron-down"}
+              size="small"
+              color={CASINO_COLORS.gold}
             />
           </View>
 
@@ -286,6 +387,33 @@ export default function UsersScreen() {
               <View>
                 <Text style={{ color: CASINO_COLORS.text, textAlign: 'right' }}>{user.phone}</Text>
               </View>
+
+              {/* Role Selector - Only for admins */}
+              {currentUser?.role === 'admin' && (
+                <View style={{
+                  backgroundColor: 'rgba(255, 215, 0, 0.05)',
+                  borderRadius: 8,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 215, 0, 0.2)'
+                }}>
+                  <UserRoleSelector
+                    currentRole={user.role}
+                    onRoleChange={(role) => handleRoleChangeRequest(user, role)}
+                    disabled={user.id === currentUser.id}
+                  />
+                  {user.id === currentUser.id && (
+                    <Text style={{
+                      fontSize: 12,
+                      color: '#f59e0b',
+                      textAlign: 'right',
+                      marginTop: 8
+                    }}>
+                      לא ניתן לשנות את התפקיד שלך
+                    </Text>
+                  )}
+                </View>
+              )}
 
               {user.groups.length > 0 && (
                 <View>
@@ -545,6 +673,17 @@ export default function UsersScreen() {
           }}
           user={selectedUser}
           userGroups={selectedUser.groups}
+        />
+      )}
+
+      {roleChangeUser && newRole && (
+        <RoleChangeConfirmation
+          visible={showRoleChangeDialog}
+          userName={roleChangeUser.name}
+          currentRole={roleChangeUser.role}
+          newRole={newRole}
+          onConfirm={handleRoleChangeConfirm}
+          onCancel={handleRoleChangeCancel}
         />
       )}
     </View>

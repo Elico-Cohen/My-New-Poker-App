@@ -62,6 +62,8 @@ export type IconName =
   | 'clipboard-list'
   | 'chevron-up'
   | 'chevron-down'
+  | 'star'
+  | 'shield-account'
   ;
 
 export const ICON_SIZES = {
