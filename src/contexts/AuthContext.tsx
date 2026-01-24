@@ -42,6 +42,7 @@ interface AuthContextType {
   // New permission functions for game management
   canContinueGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
   canAddPlayerToGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
+  canHandoffGame: (gameData?: { createdBy?: string; status?: string }) => boolean;
 }
 
 // Create the Auth Context
@@ -709,7 +710,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Regular users cannot add player to games
     return false;
   };
-  
+
+  const canHandoffGame = (gameData?: { createdBy?: string; status?: string }): boolean => {
+    if (!user) return false;
+
+    // Cannot hand off completed games
+    if (gameData?.status === 'completed') return false;
+
+    // Admin can hand off any game
+    if (user.role === 'admin') return true;
+
+    // Super user can hand off only games they created (and not completed)
+    // Compare with authUid (createdBy stores authUid, not Firestore user.id)
+    if (user.role === 'super' && gameData?.createdBy === user.authUid) return true;
+
+    // Regular users cannot hand off games
+    return false;
+  };
+
   // Context value
   const value: AuthContextType = {
     user,
@@ -732,7 +750,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     canDeleteCompletedGame,
     canViewGameAsReadOnly,
     canContinueGame,
-    canAddPlayerToGame
+    canAddPlayerToGame,
+    canHandoffGame
   };
   
   return (

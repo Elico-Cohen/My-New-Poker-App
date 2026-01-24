@@ -73,6 +73,20 @@ export interface GameDate {
     timestamp?: number;     // חותמת זמן של התאריך (מילישניות מאז 1970-01-01)
 }
 
+/** אירוע העברת שליטה במשחק */
+export interface HandoffEvent {
+    id: string;              // מזהה ייחודי
+    fromUserId: string;      // מזהה Firestore של הבעלים הקודם
+    fromUserName: string;    // שם הבעלים הקודם (snapshot)
+    fromAuthUid: string;     // Auth UID של הבעלים הקודם
+    toUserId: string;        // מזהה Firestore של הבעלים החדש
+    toUserName: string;      // שם הבעלים החדש (snapshot)
+    toAuthUid: string;       // Auth UID של הבעלים החדש
+    timestamp: number;       // מתי בוצעה ההעברה
+    reason?: string;         // סיבה אופציונלית להעברה
+    initiatedBy: string;     // authUid של מי שיזם את ההעברה (owner או admin)
+}
+
 /** הגדרת משחק */
 export interface Game {
     id: string;
@@ -98,7 +112,9 @@ export interface Game {
     // מטה-דאטה
     createdAt: number;       // Timestamp יצירת המסמך
     updatedAt: number;       // Timestamp עדכון
-    createdBy?: string;      // מזהה המשתמש שיצר את המשחק
+    createdBy?: string;      // מזהה המשתמש הנוכחי שבשליטה על המשחק (authUid) - יכול להשתנות בהעברת שליטה
+    originalCreatedBy?: string;  // מזהה המשתמש המקורי שיצר את המשחק (authUid) - לעולם לא משתנה
+    handoffLog?: HandoffEvent[]; // היסטוריית העברות שליטה במשחק
 
     // הגדרות חוק 80%
     useRoundingRule: boolean;    // האם להשתמש בחוק העיגול (80% או אחר)
