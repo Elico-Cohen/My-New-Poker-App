@@ -161,21 +161,25 @@ firebase deploy --only firestore:rules
 
 ## KNOWN LIMITATIONS
 
-1. **Role-Based Access Control:**
+1. **Role-Based Access Control (DEFERRED TO PHASE 6):**
    - Current implementation uses ownership-based enforcement (createdBy field)
-   - Full role-based enforcement requires Firebase Custom Claims
+   - Full role-based enforcement requires Firebase Custom Claims + Cloud Functions
    - Admin/Super/Regular role restrictions enforced client-side only
    - Guest read-only mode enforced client-side only
+   - **See:** `.claude/cc10x/ROLE_BASED_PERMISSIONS_SPEC.md` for complete specification
 
 2. **Security:**
    - Any authenticated user can technically write to Firestore
    - Ownership prevents hijacking, but doesn't enforce role permissions server-side
    - Client-side `verifyAccessControl()` provides additional protection layer
+   - Phase 6 will add server-side role enforcement via Custom Claims
 
-3. **Future Enhancement Path:**
-   - Implement Cloud Function to set custom claims when user role changes
-   - Update rules to check `request.auth.token.role`
-   - This enables true server-side role enforcement
+3. **Future Enhancement Path (Phase 6):**
+   - Implement Cloud Functions to set custom claims when user role changes
+   - Update Firestore rules to check `request.auth.token.role`
+   - Enforce role-based game viewing (admin sees all, super sees created+participated, etc.)
+   - Enforce role-based CRUD operations (admin/super create games, regular cannot)
+   - Complete implementation plan in `ROLE_BASED_PERMISSIONS_SPEC.md`
 
 ---
 

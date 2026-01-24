@@ -217,13 +217,40 @@
 
 ---
 
+## IMPORTANT: ROLE-BASED PERMISSIONS ENFORCEMENT
+
+**Decision Made:** 2026-01-24
+
+After Phase 2 completion, comprehensive role-based permissions were defined for:
+- Game viewing (ongoing vs completed)
+- Game creation/modification/deletion by role
+- User profile management
+- Group management
+- Statistics viewing
+
+**Implementation Strategy:**
+- ✅ **Phase 1-2**: Ownership-based Firestore rules (createdBy enforcement)
+- ✅ **Phase 1-2**: Client-side role validation in UI
+- ⏳ **Phase 6**: Server-side role enforcement via Firebase Custom Claims + Cloud Functions
+
+**Why deferred to Phase 6:**
+- Firestore rules cannot check user roles without Custom Claims (requires Cloud Functions)
+- User decided to implement once properly in Phase 6 rather than twice
+- Current ownership rules provide baseline security
+- Full specification documented in `.claude/cc10x/ROLE_BASED_PERMISSIONS_SPEC.md`
+
+**See:** `ROLE_BASED_PERMISSIONS_SPEC.md` for complete role-based permissions specification
+
+---
+
 ## KNOWN LIMITATIONS
 
-1. **Client-Side Permission Checks:**
+1. **Server-Side Role Enforcement (DEFERRED TO PHASE 6):**
    - Role modification blocked client-side for non-admins
    - Server-side validation in userManagement.ts provides backup
    - Firestore rules (Phase 1) don't enforce role-specific CRUD yet
-   - Full enforcement requires Firebase Custom Claims (future enhancement)
+   - **Phase 6**: Full enforcement via Firebase Custom Claims + Cloud Functions
+   - See `ROLE_BASED_PERMISSIONS_SPEC.md` for implementation plan
 
 2. **Real-Time Updates:**
    - Role changes don't trigger real-time updates for other viewers
