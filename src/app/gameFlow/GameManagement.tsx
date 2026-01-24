@@ -32,6 +32,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ReadOnlyIndicator } from '@/components/auth/ReadOnlyIndicator';
 import { useReadOnlyMode } from '@/components/auth/ProtectedRoute';
 import { useCan } from '@/hooks/useCan';
+import { HandoffDialog } from '@/components/game/HandoffDialog';
+import { HandoffHistory } from '@/components/game/HandoffHistory';
+import { handoffGame } from '@/services/gameHandoff';
+import { UserProfile } from '@/models/UserProfile';
 
 // Types
 interface RebuyLog {
@@ -110,7 +114,7 @@ const PlayerCard: React.FC<{
 // Main Component
 export default function GameManagement() {
   const router = useRouter();
-  const { user, canAddPlayerToGame } = useAuth();
+  const { user, canAddPlayerToGame, canHandoffGame } = useAuth();
   const { isReadOnlyMode } = useReadOnlyMode();
   const { manageGame } = useCan();
   const { 
@@ -138,8 +142,12 @@ export default function GameManagement() {
   const [dialogVisible, setDialogVisible] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showAddPlayerDialog, setShowAddPlayerDialog] = useState(false);
+  const [showHandoffDialog, setShowHandoffDialog] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // Handoff States
+  const [eligibleUsers, setEligibleUsers] = useState<UserProfile[]>([]);
 
   // Player Management States
   const [availablePlayers, setAvailablePlayers] = useState<AvailablePlayer[]>([]);
@@ -502,6 +510,54 @@ export default function GameManagement() {
     }
   };
 
+  // Handoff Functions
+  const handleOpenHandoffDialog = async () => {
+    try {
+      // Fetch all users to get eligible users (admin/super, active)
+      const allUsers = await getAllUsers();
+      setEligibleUsers(allUsers);
+      setShowHandoffDialog(true);
+    } catch (error) {
+      console.error('Error fetching eligible users:', error);
+      Alert.alert('שגיאה', 'לא ניתן לטעון רשימת משתמשים');
+    }
+  };
+
+  const handleHandoff = async (newOwnerAuthUid: string, reason?: string) => {
+    if (!user || !gameData.id) {
+      throw new Error('חסרים נתונים נדרשים להעברה');
+    }
+
+    try {
+      await handoffGame(
+        gameData.id,
+        gameData.createdBy || user.authUid!,
+        newOwnerAuthUid,
+        user.authUid!,
+        user.role,
+        reason
+      );
+
+      Alert.alert(
+        'הצלחה',
+        'השליטה הועברה בהצלחה',
+        [
+          {
+            text: 'הבנתי',
+            onPress: () => {
+              setShowHandoffDialog(false);
+              // Redirect to home since user no longer owns this game
+              router.push('/');
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error during handoff:', error);
+      throw error; // Let HandoffDialog handle the error display
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container}
@@ -599,14 +655,36 @@ export default function GameManagement() {
               canEdit={canEdit}
             />
           ))}
+
+          {/* Handoff History - Show if there are any handoffs */}
+          {gameData.handoffLog && gameData.handoffLog.length > 0 && (
+            <HandoffHistory
+              handoffLog={gameData.handoffLog}
+              originalCreator={gameData.originalCreatedBy}
+            />
+          )}
         </ScrollView>
 
-        {/* Fixed Bottom Button */}
+        {/* Fixed Bottom Buttons */}
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "position" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
           <View style={styles.fixedButtonContainer}>
+            {/* Handoff Button - Only show if user can hand off this game */}
+            {canHandoffGame(gameData) && user && (
+              <TouchableOpacity
+                onPress={handleOpenHandoffDialog}
+                style={styles.handoffButton}
+              >
+                <Icon name="swap-horizontal" size="small" color="#FFD700" />
+                <Text variant="bodyLarge" style={styles.handoffButtonText}>
+                  העבר שליטה
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Finish Game Button */}
             {canEdit ? (
               <TouchableOpacity
                 onPress={finishGame}
@@ -862,6 +940,18 @@ export default function GameManagement() {
           )}
         </View>
       </Dialog>
+
+      {/* Handoff Dialog */}
+      {user && (
+        <HandoffDialog
+          visible={showHandoffDialog}
+          currentGame={gameData}
+          currentUser={user}
+          eligibleUsers={eligibleUsers}
+          onHandoff={handleHandoff}
+          onCancel={() => setShowHandoffDialog(false)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -1033,6 +1123,24 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 16,
     textAlign: 'center',
+  },
+  handoffButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flexDirection: 'row-reverse',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    marginBottom: 12,
+  },
+  handoffButtonText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   logScrollView: {
     backgroundColor: '#1C2C2E',

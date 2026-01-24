@@ -64,6 +64,8 @@ export type IconName =
   | 'chevron-down'
   | 'star'
   | 'shield-account'
+  | 'swap-horizontal'
+  | 'account-switch'
   ;
 
 export const ICON_SIZES = {
