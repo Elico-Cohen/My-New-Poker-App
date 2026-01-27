@@ -24,6 +24,8 @@ export default function NewGroupScreen() {
   // הגדרות ברירת מחדל לקבוצה חדשה
   const [group, setGroup] = React.useState<Omit<Group, 'id' | 'createdAt' | 'updatedAt'>>({
     name: '',
+    currency: '₪',
+    createdBy: '',
     buyIn: { chips: 0, amount: 0 },
     rebuy: { chips: 0, amount: 0 },
     useRoundingRule: true,

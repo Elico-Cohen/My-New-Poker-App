@@ -14,32 +14,38 @@ const CASINO_COLORS = {
 };
 
 interface PlayersTabProps {
+  groupId: string;
   permanentPlayers: string[];
   guestPlayers: string[];
   onChange: (permanent: string[], guests: string[]) => void;
+  onClose?: () => void;
 }
 
 function PlayersTab({
+  groupId,
   permanentPlayers,
   guestPlayers,
-  onChange
+  onChange,
+  onClose = () => {}
 }: PlayersTabProps) {
   return (
-    <View style={{ 
+    <View style={{
       flex: 1,
       backgroundColor: CASINO_COLORS.background
     }}>
-      <ScrollView 
-        contentContainerStyle={{ 
+      <ScrollView
+        contentContainerStyle={{
           flexGrow: 1,
           padding: 16,
           paddingTop: 24
         }}
       >
         <PlayersInGroupManagement
+          groupId={groupId}
           permanentPlayers={permanentPlayers}
           guestPlayers={guestPlayers}
           onUpdatePlayers={onChange}
+          onClose={onClose}
         />
       </ScrollView>
     </View>

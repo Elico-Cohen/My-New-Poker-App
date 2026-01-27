@@ -12,7 +12,6 @@ import {
 
   // חישובי משחק
   calculateGameSummary,
-  calculateGamePlayersResults,
   calculateOptimalPayments,
 
   // חישובים פיננסיים
@@ -26,6 +25,9 @@ import {
   // חישובי מגמות זמן
   calculateTimeTrend,
 } from '../index';
+
+// Import from legacy bridge for backward compatibility
+import { calculateGamePlayersResults } from './gameBridge';
 
 /**
  * 1. מיפוי פונקציות שחקן

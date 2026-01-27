@@ -42,7 +42,7 @@ export const filterGames = (games: Game[], filter: GameFilter): Game[] => {
 
     // סינון לפי משתמש
     if (filter.userId) {
-      const playerFound = game.players.some(player => player.userId === filter.userId);
+      const playerFound = game.players?.some(player => player.userId === filter.userId) ?? false;
       if (!playerFound) {
         return false;
       }
@@ -50,7 +50,7 @@ export const filterGames = (games: Game[], filter: GameFilter): Game[] => {
 
     // סינון לפי זמן
     if (filter.timeFilter && filter.timeFilter !== 'all') {
-      const gameDate = new Date(game.gameDate.year, game.gameDate.month - 1, game.gameDate.day);
+      const gameDate = new Date(game.date.year, game.date.month - 1, game.date.day);
       const now = new Date();
       
       switch (filter.timeFilter) {
@@ -100,7 +100,7 @@ export const filterGames = (games: Game[], filter: GameFilter): Game[] => {
  * @returns האם השחקן ניצח
  */
 export const didPlayerWin = (game: Game, userId: string): boolean => {
-  const player = game.players.find(p => p.userId === userId);
+  const player = game.players?.find(p => p.userId === userId);
   if (!player) {
     return false;
   }
@@ -121,24 +121,26 @@ export const didPlayerWin = (game: Game, userId: string): boolean => {
 /**
  * יצירת תוצאת חישוב
  * @param data נתוני התוצאה
- * @param source מקורות הנתונים
+ * @param source מקורות הנתונים (unused, kept for backward compatibility)
  * @param cached האם התוצאה ממטמון
- * @param filters פילטרים שהופעלו
- * @returns תוצאת חישוב מובנית
+ * @param filters פילטרים שהופעלו (unused, kept for backward compatibility)
+ * @param executionTimeMs זמן ביצוע החישוב (ברירת מחדל: 0)
+ * @returns תוצאת חישוב מובנית בפורמט CalculationResult
  */
 export const createCalculationResult = <T>(
-  data: T, 
-  source: string[] = [], 
-  cached: boolean = false, 
-  filters: Record<string, any> = {}
-) => {
+  data: T,
+  source: string[] = [],
+  cached: boolean = false,
+  filters: Record<string, any> = {},
+  executionTimeMs: number = 0
+): { data: T; metadata: { cached: boolean; executionTimeMs: number; timestamp: number; calculationId: string } } => {
   return {
     data,
     metadata: {
+      cached,
+      executionTimeMs,
       timestamp: Date.now(),
-      source,
-      filters
-    },
-    cached
+      calculationId: `calc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    }
   };
 }; 

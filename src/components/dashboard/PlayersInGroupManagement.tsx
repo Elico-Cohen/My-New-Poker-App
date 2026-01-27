@@ -281,7 +281,7 @@ export function PlayersInGroupManagement({
         alignItems: 'center',
         marginBottom: 8
       }}>
-        <Text variant="titleLarge" style={{ color: CASINO_COLORS.gold }}>{title}</Text>
+        <Text variant="h4" style={{ color: CASINO_COLORS.gold }}>{title}</Text>
       </View>
       {players.map(player => (
         <Card key={player.id} style={{
@@ -299,7 +299,7 @@ export function PlayersInGroupManagement({
             paddingVertical: 4,
             paddingHorizontal: 4,
           }}>
-            <Text variant="labelLarge" style={{ color: CASINO_COLORS.text, fontWeight: '600' }}>
+            <Text variant="bodyLarge" style={{ color: CASINO_COLORS.text, fontWeight: '600' }}>
               {player.name}
             </Text>
             <View style={{ flexDirection: 'row', gap: 24 }}>
@@ -368,20 +368,14 @@ export function PlayersInGroupManagement({
       <Dialog
         visible={showAddPlayersDialog}
         title="הוספת שחקנים"
-        onDismiss={() => {
+        message=""
+        onCancel={() => {
           setShowAddPlayersDialog(false);
           setSelectedPlayers([]);
           setShowInactivePlayers(false);
         }}
-        containerStyle={{
-          backgroundColor: CASINO_COLORS.background,
-        }}
-        style={{
-          backgroundColor: CASINO_COLORS.background,
-          borderColor: CASINO_COLORS.gold,
-          borderWidth: 1,
-          width: '100%'
-        }}
+        onConfirm={handleConfirmAddPlayers}
+        hideDefaultButtons
       >
         <View style={{ gap: 16, backgroundColor: CASINO_COLORS.background, width: '100%', padding: 16 }}>
           <View style={{
@@ -462,8 +456,7 @@ export function PlayersInGroupManagement({
                       size="small"
                       icon="account-outline"
                       iconColor={CASINO_COLORS.text}
-                      onPress={(e: React.SyntheticEvent) => {
-                        e.stopPropagation();
+                      onPress={() => {
                         togglePlayerType(player.id);
                       }}
                       style={{
@@ -498,38 +491,16 @@ export function PlayersInGroupManagement({
       <Dialog
         visible={showNewPlayerDialog}
         title="הוסף שחקן חדש"
-        onDismiss={() => {
+        message=""
+        onCancel={() => {
           setShowNewPlayerDialog(false);
           setNewPlayerData({ name: '', phone: '', email: '' });
           setNameError(null);
           setError(null);
         }}
-        containerStyle={{
-          backgroundColor: CASINO_COLORS.background,
-        }}
-        style={{
-          backgroundColor: CASINO_COLORS.background,
-          borderColor: CASINO_COLORS.gold,
-          borderWidth: 1,
-          width: '100%'
-        }}
-        actions={[
-          {
-            text: "ביטול",
-            onPress: () => {
-              setShowNewPlayerDialog(false);
-              setNewPlayerData({ name: '', phone: '', email: '' });
-              setNameError(null);
-              setError(null);
-            },
-            style: "cancel",
-          },
-          {
-            text: "אישור",
-            onPress: handleNewPlayerSubmit,
-            style: "confirm",
-          },
-        ]}
+        onConfirm={handleNewPlayerSubmit}
+        confirmText="אישור"
+        cancelText="ביטול"
       >
         <View style={styles.newPlayerContainer}>
           <Text variant="bodyLarge" style={styles.inputLabel}>

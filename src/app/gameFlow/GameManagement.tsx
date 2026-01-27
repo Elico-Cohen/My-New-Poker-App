@@ -34,6 +34,7 @@ import { useReadOnlyMode } from '@/components/auth/ProtectedRoute';
 import { useCan } from '@/hooks/useCan';
 import { HandoffDialog } from '@/components/game/HandoffDialog';
 import { HandoffHistory } from '@/components/game/HandoffHistory';
+import { GameStatsPanel } from '@/components/game/GameStatsPanel';
 import { handoffGame } from '@/services/gameHandoff';
 import { UserProfile } from '@/models/UserProfile';
 
@@ -61,11 +62,15 @@ const PlayerCard: React.FC<{
   buyInAmount: number;
   rebuyAmount: number;
   canEdit: boolean;
-}> = ({ player, onIncrement, onDecrement, onFinalChipsChange, buyInAmount, rebuyAmount, canEdit }) => {
+  isHighlighted?: boolean;
+}> = ({ player, onIncrement, onDecrement, onFinalChipsChange, buyInAmount, rebuyAmount, canEdit, isHighlighted }) => {
   const totalInvestment = (player.buyInCount * buyInAmount) + (player.rebuyCount * rebuyAmount);
-  
+
   return (
-    <View style={styles.playerCard}>
+    <View style={[
+      styles.playerCard,
+      isHighlighted && styles.highlightedCard
+    ]}>
       <View style={styles.topRow}>
         <View style={styles.financialColumn}>
           <Text style={styles.financialText}>Buy-In: {player.buyInCount * buyInAmount} ₪</Text>
@@ -149,6 +154,9 @@ export default function GameManagement() {
   // Handoff States
   const [eligibleUsers, setEligibleUsers] = useState<UserProfile[]>([]);
 
+  // Highlight state - track the ID of the last player with rebuy change
+  const [highlightedPlayerId, setHighlightedPlayerId] = useState<string | null>(null);
+
   // Player Management States
   const [availablePlayers, setAvailablePlayers] = useState<AvailablePlayer[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
@@ -161,7 +169,7 @@ export default function GameManagement() {
   // Ref to track pending timeouts for cleanup
   const playerDialogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Cleanup timeout on unmount
+  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (playerDialogTimeoutRef.current) {
@@ -392,7 +400,10 @@ export default function GameManagement() {
       );
       return;
     }
-    
+
+    // Set highlighted player - stays until next rebuy change
+    setHighlightedPlayerId(playerId);
+
     setGameData((prev: GameData): GameData => ({
       ...prev,
       players: prev.players.map((p) => {
@@ -411,9 +422,9 @@ export default function GameManagement() {
           playerId,
           playerName: players.find(p => p.id === playerId)?.name || '',
           action: delta > 0 ? 'add' : 'remove',
-          time: new Date().toLocaleTimeString('he-IL', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          time: new Date().toLocaleTimeString('he-IL', {
+            hour: '2-digit',
+            minute: '2-digit'
           })
         },
         ...prev.rebuyLogs,
@@ -460,12 +471,12 @@ export default function GameManagement() {
       );
       return;
     }
-    
+
     if (!allFinalChipsEntered) return;
 
     try {
       console.log('GameManagement: Starting finish game process');
-      
+
       const summary = calculateInitialGameSummary(
         players,
         gameData.buyInSnapshot,
@@ -474,7 +485,18 @@ export default function GameManagement() {
         gameData.roundingRulePercentage
       );
 
-      const needsOpenGames = gameData.useRoundingRule && 
+      // === VALIDATION 2: Wins vs Losses ===
+      // Total wins must not exceed total losses (impossible to balance)
+      if (summary.totalWins > summary.totalLosses) {
+        Alert.alert(
+          "שגיאה בחישוב",
+          `סך הזכיות (${summary.totalWins} ₪) גדול מסך ההפסדים (${summary.totalLosses} ₪).\n\nזה בלתי אפשרי לאזן. יש לבדוק את ספירת הצ'יפים הסופיים.`,
+          [{ text: "הבנתי" }]
+        );
+        return;
+      }
+
+      const needsOpenGames = gameData.useRoundingRule &&
                            summary.openGamesCount > 0;
 
       const newStatus = needsOpenGames ? 'ended' : 'final_results';
@@ -633,9 +655,17 @@ export default function GameManagement() {
         />
       </View>
 
+      {/* Game Statistics Panel */}
+      <GameStatsPanel
+        players={players}
+        buyInAmount={buyInAmount}
+        rebuyAmount={rebuyAmount}
+        gameStartTime={gameData.createdAt}
+      />
+
       {/* Main Scrollable Content */}
       <View style={{ flex: 1 }}>
-        <ScrollView 
+        <ScrollView
           style={styles.mainContent}
           contentContainerStyle={[
             styles.scrollContainer,
@@ -653,6 +683,7 @@ export default function GameManagement() {
               buyInAmount={buyInAmount}
               rebuyAmount={rebuyAmount}
               canEdit={canEdit}
+              isHighlighted={player.id === highlightedPlayerId}
             />
           ))}
 
@@ -677,8 +708,8 @@ export default function GameManagement() {
                 onPress={handleOpenHandoffDialog}
                 style={styles.handoffButton}
               >
-                <Icon name="swap-horizontal" size="small" color="#FFD700" />
-                <Text variant="bodyLarge" style={styles.handoffButtonText}>
+                <Icon name="swap-horizontal" size="tiny" color="#FFD700" />
+                <Text style={styles.handoffButtonText}>
                   העבר שליטה
                 </Text>
               </TouchableOpacity>
@@ -1033,6 +1064,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFD700',
   },
+  highlightedCard: {
+    borderWidth: 3,
+    borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 8,
+    backgroundColor: '#243538',
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1125,22 +1166,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   handoffButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     flexDirection: 'row-reverse',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    backgroundColor: 'rgba(255, 215, 0, 0.1)',
-    marginBottom: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.5)',
+    backgroundColor: 'rgba(255, 215, 0, 0.05)',
+    marginBottom: 8,
+    alignSelf: 'center',
   },
   handoffButtonText: {
     color: '#FFD700',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
   },
   logScrollView: {
     backgroundColor: '#1C2C2E',

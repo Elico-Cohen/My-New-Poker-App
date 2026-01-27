@@ -82,17 +82,17 @@ const StatisticsChart: React.FC<StatisticsChartProps> = ({
     labels: data.labels,
     datasets: data.datasets.map((dataset, index) => ({
       data: dataset.data,
-      color: (opacity = 1) => {
+      color: (opacity = 1): string => {
         // If dataset specifies colors for each point
         if (dataset.colors && dataset.colors.length === dataset.data.length) {
-          return () => dataset.colors![index % dataset.colors!.length];
+          return dataset.colors[index % dataset.colors.length];
         }
-        
+
         // If dataset specifies a single color
         if (dataset.colors && dataset.colors.length === 1) {
           return dataset.colors[0];
         }
-        
+
         // Default color based on dataset index
         return CASINO_COLORS.chartColors[index % CASINO_COLORS.chartColors.length];
       },
@@ -237,8 +237,7 @@ const StatisticsChart: React.FC<StatisticsChartProps> = ({
               bezier
               fromZero
               yAxisSuffix={yAxisSuffix}
-              yAxisPrefix={yAxisPrefix}
-              style={styles.chart}
+                            style={styles.chart}
               withInnerLines={showGrid}
               withOuterLines={showGrid}
               withDots={true}
@@ -269,7 +268,7 @@ const StatisticsChart: React.FC<StatisticsChartProps> = ({
               style={styles.chart}
               fromZero
               yAxisSuffix={yAxisSuffix}
-              yAxisPrefix={yAxisPrefix}
+              yAxisLabel=""
               withInnerLines={showGrid}
               showBarTops={true}
               showValuesOnTopOfBars={showValues}
@@ -295,7 +294,6 @@ const StatisticsChart: React.FC<StatisticsChartProps> = ({
               paddingLeft="0"
               absolute
               hasLegend={!hideLegend}
-              doughnut={type === 'doughnut'}
             />
             {renderLegend()}
           </View>
@@ -319,13 +317,12 @@ const StatisticsChart: React.FC<StatisticsChartProps> = ({
               style={styles.chart}
               fromZero
               yAxisSuffix={yAxisSuffix}
-              yAxisPrefix={yAxisPrefix}
+              yAxisLabel=""
               withInnerLines={showGrid}
               segments={4}
               showValuesOnTopOfBars={false}
               horizontalLabelRotation={horizontalLabels ? 0 : -45}
               withHorizontalLabels={true}
-              stacked
             />
             {renderLegend()}
           </View>

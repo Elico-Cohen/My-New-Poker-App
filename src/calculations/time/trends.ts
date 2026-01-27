@@ -113,9 +113,9 @@ export const calculateTimeTrend: CalculationFunction<TimeTrendParams, TimeTrendR
     
     // קביעת טווח התאריכים
     const sortedGames = [...filteredGames].sort((a, b) => {
-      if (a.gameDate && b.gameDate) {
-        const dateA = new Date(a.gameDate.year, a.gameDate.month - 1, a.gameDate.day);
-        const dateB = new Date(b.gameDate.year, b.gameDate.month - 1, b.gameDate.day);
+      if (a.date && b.date) {
+        const dateA = new Date(a.date.year, a.date.month - 1, a.date.day);
+        const dateB = new Date(b.date.year, b.date.month - 1, b.date.day);
         return dateA.getTime() - dateB.getTime();
       }
       return 0;
@@ -127,15 +127,15 @@ export const calculateTimeTrend: CalculationFunction<TimeTrendParams, TimeTrendR
     let periodStart: Date;
     let periodEnd: Date;
     
-    if (firstGame.gameDate) {
-      periodStart = new Date(firstGame.gameDate.year, firstGame.gameDate.month - 1, firstGame.gameDate.day);
+    if (firstGame.date) {
+      periodStart = new Date(firstGame.date.year, firstGame.date.month - 1, firstGame.date.day);
     } else {
       periodStart = new Date();
       periodStart.setFullYear(periodStart.getFullYear() - 1);
     }
     
-    if (lastGame.gameDate) {
-      periodEnd = new Date(lastGame.gameDate.year, lastGame.gameDate.month - 1, lastGame.gameDate.day);
+    if (lastGame.date) {
+      periodEnd = new Date(lastGame.date.year, lastGame.date.month - 1, lastGame.date.day);
     } else {
       periodEnd = new Date();
     }
@@ -278,9 +278,9 @@ export const calculateTimeTrend: CalculationFunction<TimeTrendParams, TimeTrendR
     const items: TimeTrendItem[] = periods.map(period => {
       // סינון משחקים לתקופה
       const periodGames = sortedGames.filter(game => {
-        if (!game.gameDate) return false;
+        if (!game.date) return false;
         
-        const gameDate = new Date(game.gameDate.year, game.gameDate.month - 1, game.gameDate.day);
+        const gameDate = new Date(game.date.year, game.date.month - 1, game.date.day);
         return gameDate >= period.start && gameDate <= period.end;
       });
       

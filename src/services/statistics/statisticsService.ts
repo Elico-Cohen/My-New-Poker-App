@@ -46,6 +46,15 @@ export const statsCache: CacheStore = new Map();
 export const CACHE_EXPIRY = 15 * 60 * 1000; // 15 minutes in ms
 
 /**
+ * ניקוי כל המטמון של הסטטיסטיקות
+ * יש לקרוא לפונקציה זו כאשר נתונים משתנים (למשל, מחיקת משחק)
+ */
+export const clearAllStatsCache = (): void => {
+  console.log('statisticsService: ניקוי כל המטמון של הסטטיסטיקות');
+  statsCache.clear();
+};
+
+/**
  * מביא את כל המשחקים מהמאגר המרכזי
  * 
  * השימוש במאגר הנתונים המרכזי מבטיח שנתוני המשחקים נטענים פעם אחת בלבד 

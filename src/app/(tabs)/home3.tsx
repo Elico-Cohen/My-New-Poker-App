@@ -120,6 +120,7 @@ class Home3Screen extends React.Component {
             title="Start New Game"
             variant="primary"
             icon="cards-playing-outline"
+            onPress={() => {}}
           />
         </View>
       </View>

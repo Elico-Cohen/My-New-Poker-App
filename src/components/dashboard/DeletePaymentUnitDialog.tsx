@@ -9,16 +9,20 @@ import { PaymentUnit } from '@/models/PaymentUnit';
 import { deletePaymentUnit } from '@/services/paymentUnits';
 import { updateUser } from '@/services/users';
 
+interface EnrichedPlayer {
+  id: string;
+  name: string;
+}
+
+interface EnrichedPaymentUnit extends Omit<PaymentUnit, 'players'> {
+  players: EnrichedPlayer[];
+}
+
 interface DeletePaymentUnitDialogProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  unit: PaymentUnit & {
-    players: {
-      id: string;
-      name: string;
-    }[];
-  };
+  unit: EnrichedPaymentUnit;
 }
 
 export function DeletePaymentUnitDialog({
@@ -71,8 +75,11 @@ export function DeletePaymentUnitDialog({
   return (
     <Dialog
       visible={visible}
-      onClose={onClose}
+      onCancel={onClose}
+      onConfirm={handleDelete}
       title="מחיקת יחידת תשלום"
+      message=""
+      hideDefaultButtons
     >
       <View style={{ gap: 16 }}>
         {error && (

@@ -12,6 +12,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Get user's role from custom claims (set by Cloud Function)
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    // Check if user is super user
+    function isSuper() {
+      return isAuthenticated() && getUserRole() == 'super';
+    }
+
+    // Check if user is admin or super
+    function isAdminOrSuper() {
+      return isAdmin() || isSuper();
+    }
+
     // Check if user owns a resource (createdBy matches auth.uid)
     function isOwner(resourceData) {
       return isAuthenticated() && resourceData.createdBy == request.auth.uid;
@@ -23,83 +43,91 @@ service cloud.firestore {
     }
 
     // ============================================
-    // COLLECTION RULES
+    // PERMISSION MATRIX
+    // ============================================
+    //
+    // | Collection    | Admin      | Super           | Regular    | Guest/No-Auth |
+    // |---------------|------------|-----------------|------------|---------------|
+    // | users         | CRUD       | Read            | Read       | None          |
+    // | groups        | CRUD       | CRUD (own)      | Read       | None          |
+    // | games         | CRUD       | CRUD (own)      | Read       | None          |
+    // | paymentUnits  | CRUD       | Read            | Read       | None          |
+    //
     // ============================================
 
     // --- USERS COLLECTION ---
     match /users/{userId} {
-      // All authenticated users can read user profiles
-      // This is necessary for looking up user information in games
-      // Guests (authenticated with role='guest') can also read
+      // Read: All authenticated users can read user profiles
       allow read: if isAuthenticated();
 
-      // Creating users: For now, allow authenticated users to create
-      // In production, this should be restricted to admin only via custom claims
-      allow create: if isAuthenticated();
+      // Create: Only admin can create users
+      // (Regular users are created through Firebase Auth + registration flow)
+      allow create: if isAdmin();
 
-      // Updating users: For now, allow authenticated users to update
-      // In production, this should be restricted to admin only via custom claims
-      // Users should not be able to change their own role without admin approval
-      allow update: if isAuthenticated();
+      // Update: Admin can update any user
+      // Users can update ONLY specific fields on their own document:
+      // - lastLoginAt (for login tracking)
+      // - mustChangePassword, updatedAt (for password change flow)
+      // Note: We check resource.data.authUid because the document ID is not the auth UID
+      allow update: if isAdmin() ||
+                    (isAuthenticated() &&
+                     resource.data.authUid == request.auth.uid &&
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['lastLoginAt', 'mustChangePassword', 'updatedAt']));
 
-      // Deleting users: For now, allow authenticated users
-      // In production, this should be admin-only via custom claims
-      allow delete: if isAuthenticated();
+      // Delete: Only admin can delete users
+      allow delete: if isAdmin();
     }
 
     // --- GROUPS COLLECTION ---
     match /groups/{groupId} {
-      // All authenticated users can read groups (including guests)
+      // Read: All authenticated users can read groups
       allow read: if isAuthenticated();
 
-      // Only authenticated users who will be marked as creators can create groups
-      // The createdBy field must match the authenticated user's UID
-      allow create: if isAuthenticated() && hasValidCreatedBy();
+      // Create: Admin and Super users can create groups
+      // Must set themselves as the creator
+      allow create: if isAdminOrSuper() && hasValidCreatedBy();
 
-      // Users can update groups they created, or any user for now
-      // In production with custom claims, restrict to admin or owner only
-      allow update: if isAuthenticated() &&
-                    (isOwner(resource.data) || true); // Temporary: allow all for now
+      // Update: Admin can update any group, Super can update their own groups
+      allow update: if isAdmin() || (isSuper() && isOwner(resource.data));
 
-      // Users can delete groups they created
-      allow delete: if isAuthenticated() && isOwner(resource.data);
+      // Delete: Admin can delete any group, Super can delete their own groups
+      allow delete: if isAdmin() || (isSuper() && isOwner(resource.data));
     }
 
     // --- GAMES COLLECTION ---
     match /games/{gameId} {
-      // All authenticated users can read games (including guests for read-only viewing)
+      // Read: All authenticated users can read games (for viewing history, statistics)
       allow read: if isAuthenticated();
 
-      // Only authenticated users can create games
-      // The createdBy field MUST match the authenticated user's UID (authUid)
-      allow create: if isAuthenticated() && hasValidCreatedBy();
+      // Create: Admin and Super users can create games
+      // Must set themselves as the creator
+      allow create: if isAdminOrSuper() && hasValidCreatedBy();
 
-      // Users can update games they created
-      // Validation: createdBy cannot be changed after creation (prevent ownership hijacking)
-      allow update: if isAuthenticated() &&
-                    isOwner(resource.data) &&
-                    request.resource.data.createdBy == resource.data.createdBy;
+      // Update: Admin can update any game, Super can update their own games
+      // IMPORTANT: createdBy cannot be changed (prevents ownership hijacking)
+      // EXCEPTION: createdBy CAN be changed for game handoff, but only by current owner or admin
+      allow update: if isAdmin() ||
+                    (isSuper() && isOwner(resource.data));
 
-      // Users can delete games they created
-      allow delete: if isAuthenticated() && isOwner(resource.data);
+      // Delete: Admin can delete any game, Super can delete their own active games
+      allow delete: if isAdmin() ||
+                    (isSuper() && isOwner(resource.data) && resource.data.status != 'completed');
     }
 
     // --- PAYMENT UNITS COLLECTION ---
     match /paymentUnits/{paymentUnitId} {
-      // All authenticated users can read payment units (including guests)
+      // Read: All authenticated users can read payment units
       allow read: if isAuthenticated();
 
-      // For now, allow authenticated users to create payment units
-      // In production with custom claims, restrict to admin only
-      allow create: if isAuthenticated();
+      // Create: Only admin can create payment units
+      allow create: if isAdmin();
 
-      // For now, allow authenticated users to update payment units
-      // In production with custom claims, restrict to admin only
-      allow update: if isAuthenticated();
+      // Update: Only admin can update payment units
+      allow update: if isAdmin();
 
-      // For now, allow authenticated users to delete payment units
-      // In production with custom claims, restrict to admin only
-      allow delete: if isAuthenticated();
+      // Delete: Only admin can delete payment units
+      allow delete: if isAdmin();
     }
 
     // ============================================
@@ -112,34 +140,3 @@ service cloud.firestore {
     }
   }
 }
-
-// ============================================
-// IMPORTANT NOTES FOR FUTURE ENHANCEMENT
-// ============================================
-//
-// CURRENT LIMITATIONS:
-// 1. Cannot query users by authUid in security rules (Firestore rules don't support queries)
-// 2. Cannot implement role-based access control without:
-//    a) Custom claims in Firebase Auth (requires Cloud Functions)
-//    b) OR restructuring users collection to use authUid as document ID
-//
-// CURRENT APPROACH:
-// - All authenticated users can perform most operations
-// - Ownership is enforced (users can only modify their own games/groups)
-// - Client-side permission checks via verifyAccessControl() provide additional layer
-// - Guest users (role='guest') rely on client-side UI restrictions for read-only mode
-//
-// RECOMMENDED PRODUCTION UPGRADE:
-// 1. Implement Firebase Cloud Functions to set custom claims when user role changes
-// 2. Add role to Firebase Auth custom claims: auth.token.role
-// 3. Update rules to use: request.auth.token.role == 'admin'
-// 4. This eliminates circular dependency and enables true server-side role enforcement
-//
-// EXAMPLE with custom claims:
-// function isAdmin() {
-//   return request.auth.token.role == 'admin';
-// }
-// function isSuper() {
-//   return request.auth.token.role == 'super';
-// }
-//

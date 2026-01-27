@@ -97,7 +97,7 @@ export function DeleteGameDialog({
           variant="bodyNormal" 
           style={[textStyle, { color: "#FFFFFF" }]}
         >
-          האם אתה בטוח שברצונך למחוק את המשחק מתאריך {formatDate(game.gameDate || game.date)}?
+          האם אתה בטוח שברצונך למחוק את המשחק מתאריך {formatDate(game.date)}?
         </Text>
 
         <Text 

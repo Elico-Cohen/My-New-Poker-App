@@ -5,6 +5,7 @@ import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { Icon } from '@/components/common/Icon';
+import { IconName } from '@/theme/icons';
 import { performSecurityAudit, SecurityAuditResults, SecurityIssue } from '@/utils/securityAudit';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -97,7 +98,7 @@ const SecurityAuditTool: React.FC = () => {
     }
   };
 
-  const getSeverityIcon = (severity: string): string => {
+  const getSeverityIcon = (severity: string): IconName => {
     switch (severity) {
       case 'high':
         return 'alert-circle';
@@ -110,7 +111,7 @@ const SecurityAuditTool: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: boolean): string => {
+  const getStatusIcon = (status: boolean): IconName => {
     return status ? 'check-circle' : 'close-circle';
   };
 
@@ -139,7 +140,7 @@ const SecurityAuditTool: React.FC = () => {
 
       {results && (
         <ScrollView style={styles.resultsContainer}>
-          <Text variant="h5" style={styles.sectionTitle}>
+          <Text variant="h4" style={styles.sectionTitle}>
             סטטוס אבטחה
           </Text>
 
@@ -185,7 +186,7 @@ const SecurityAuditTool: React.FC = () => {
           {/* Issues List */}
           {results.issues.length > 0 && (
             <>
-              <Text variant="h5" style={styles.sectionTitle}>
+              <Text variant="h4" style={styles.sectionTitle}>
                 בעיות שזוהו ({results.issues.length})
               </Text>
               

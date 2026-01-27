@@ -2,9 +2,14 @@
  * טיפוסים בסיסיים לשכבת החישובים
  */
 
-import { Game, GameDate } from '../../models/Game';
-import { UserProfile } from '../../models/UserProfile';
-import { Group } from '../../models/Group';
+import { Game as GameModel, GameDate, PlayerInGame, Payment, RebuyLog, OpenGame, HandoffEvent } from '../../models/Game';
+import { UserProfile as UserProfileModel } from '../../models/UserProfile';
+import { Group as GroupModel } from '../../models/Group';
+
+// Type aliases for use in this file
+type Game = GameModel;
+type UserProfile = UserProfileModel;
+type Group = GroupModel;
 
 /**
  * מטא-נתונים של תוצאת חישוב
@@ -333,38 +338,11 @@ export interface TimeTrendResult {
   changePercentage: number;
 }
 
-// טיפוסים לייבוא ממודלים אחרים (גישור)
-export interface Game {
-  id: string;
-  gameDate?: string;
-  players?: Player[];
-  groupId?: string;
-  status?: string;
-}
+// Re-export types from models for convenience
+export { GameDate, PlayerInGame, Payment, RebuyLog, OpenGame, HandoffEvent } from '../../models/Game';
+export { Game as GameModel } from '../../models/Game';
+export { UserProfile } from '../../models/UserProfile';
+export { Group } from '../../models/Group';
 
-export interface Player {
-  userId: string;
-  buyin?: number;
-  rebuys?: Rebuy[];
-  finalChips?: number;
-  payments?: Payment[];
-  result?: number;
-}
-
-export interface UserProfile {
-  id: string;
-  displayName: string;
-  profilePicture?: string;
-}
-
-interface Rebuy {
-  amount: number;
-  timestamp?: number;
-}
-
-interface Payment {
-  to: string;
-  from: string;
-  amount: number;
-  timestamp?: number;
-} 
+// Also export local type aliases
+export type { Game, UserProfile as UserProfileType, Group as GroupType }; 

@@ -40,9 +40,12 @@ export const LogoutButton: React.FC<LogoutButtonProps> = ({
               try {
                 console.log('Logout initiated from LogoutButton');
                 await logout();
-                // ניווט למסך הלוגין
-                console.log('Navigating to login screen after logout');
-                router.navigate('/login');
+                // ניקוי מחסנית הניווט והחלפה למסך הלוגין
+                console.log('Clearing navigation stack and replacing with login screen');
+                while (router.canGoBack()) {
+                  router.back();
+                }
+                router.replace('/login');
               } catch (error) {
                 console.error('Logout error:', error);
               }
@@ -54,9 +57,12 @@ export const LogoutButton: React.FC<LogoutButtonProps> = ({
       try {
         console.log('Direct logout initiated from LogoutButton');
         await logout();
-        // ניווט למסך הלוגין
-        console.log('Navigating to login screen after direct logout');
-        router.navigate('/login');
+        // ניקוי מחסנית הניווט והחלפה למסך הלוגין
+        console.log('Clearing navigation stack and replacing with login screen');
+        while (router.canGoBack()) {
+          router.back();
+        }
+        router.replace('/login');
       } catch (error) {
         console.error('Direct logout error:', error);
       }

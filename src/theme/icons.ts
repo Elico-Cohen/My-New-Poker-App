@@ -66,6 +66,23 @@ export type IconName =
   | 'shield-account'
   | 'swap-horizontal'
   | 'account-switch'
+  | 'eye'
+  | 'eye-off'
+  | 'alert'
+  | 'information'
+  | 'help-circle'
+  | 'content-save'
+  | 'sync'
+  | 'medal'
+  | 'medal-outline'
+  | 'podium'
+  | 'chart-bar'
+  | 'currency-ils'
+  | 'clock-outline'
+  | 'chart-line'
+  | 'whatsapp'
+  | 'message-text'
+  | 'share-variant'
   ;
 
 export const ICON_SIZES = {

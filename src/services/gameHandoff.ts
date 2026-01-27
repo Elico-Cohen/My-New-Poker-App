@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { HandoffEvent } from '@/models/Game';
 import { getUserById } from './users';
@@ -59,7 +59,6 @@ export async function handoffGame(
   }
 
   // Find new owner by authUid
-  const { collection, query, where, getDocs } = await import('firebase/firestore');
   const usersRef = collection(db, 'users');
   const q = query(usersRef, where('authUid', '==', newOwnerAuthUid));
   const querySnapshot = await getDocs(q);
@@ -69,9 +68,13 @@ export async function handoffGame(
   }
 
   const toUserDoc = querySnapshot.docs[0];
+  const toUserData = toUserDoc.data();
   const toUserProfile = {
     id: toUserDoc.id,
-    ...toUserDoc.data()
+    name: toUserData.name as string,
+    role: toUserData.role as string,
+    isActive: toUserData.isActive as boolean,
+    authUid: toUserData.authUid as string | undefined
   };
 
   // 6. Validate new owner is eligible (admin or super, and active)

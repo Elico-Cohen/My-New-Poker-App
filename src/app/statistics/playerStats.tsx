@@ -190,7 +190,7 @@ export default function PlayerStatsScreen() {
       if (users && users.length > 0) {
         // חיפוש התאמה לפי אימייל
         const firestoreUser = users.find(
-          u => u.email && u.email.toLowerCase() === currentUser.email.toLowerCase()
+          u => u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()
         );
         
         if (firestoreUser) {

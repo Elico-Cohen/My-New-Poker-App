@@ -17,6 +17,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import gameDataManager from '@/services/gameDataManager';
 import { clearStatsCache } from '@/services/statistics/statisticsService';
 import NetInfo from '@react-native-community/netinfo';
+import { getUserById } from '@/services/users';
+import {
+  generateGroupMessage,
+  generatePayerMessage,
+  generateReceiverMessage,
+  copyToClipboard,
+  openWhatsAppWithMessage
+} from '@/utils/whatsappPayment';
+import { UserProfile } from '@/models/UserProfile';
 
 interface PaymentEntity {
   id: string;
@@ -39,6 +48,16 @@ export default function PaymentCalculations() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [userPhones, setUserPhones] = useState<Map<string, string>>(new Map());
+  const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
+  const [sendingMessages, setSendingMessages] = useState(false);
+  const [messageProgress, setMessageProgress] = useState({ current: 0, total: 0 });
+  const [pendingMessages, setPendingMessages] = useState<Array<{
+    recipientName: string;
+    recipientPhone: string;
+    message: string;
+  }>>([]);
+  const [showMessageDialog, setShowMessageDialog] = useState(false);
   const { canManageEntity } = useAuth();
 
   // בדיקת הרשאות להמשך המשחק
@@ -85,6 +104,41 @@ export default function PaymentCalculations() {
       console.error('PaymentCalculations: Error refreshing data after game completion:', error);
     }
   };
+
+  // Fetch user phone numbers and names for WhatsApp functionality
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const phones = new Map<string, string>();
+      const names = new Map<string, string>();
+      const playerIds = gameData.players.map(p => p.id);
+
+      for (const playerId of playerIds) {
+        try {
+          const user = await getUserById(playerId);
+          if (user?.phone) {
+            phones.set(playerId, user.phone);
+          }
+          if (user?.name) {
+            names.set(playerId, user.name);
+          }
+        } catch (err) {
+          console.error(`Error fetching data for user ${playerId}:`, err);
+        }
+      }
+
+      // Also add names from gameData.players for fallback
+      gameData.players.forEach(p => {
+        if (!names.has(p.id)) {
+          names.set(p.id, p.name);
+        }
+      });
+
+      setUserPhones(phones);
+      setUserNames(names);
+    };
+
+    fetchUserData();
+  }, [gameData.players]);
 
   // Group players by payment units
   useEffect(() => {
@@ -301,6 +355,213 @@ export default function PaymentCalculations() {
     }
   };
 
+  // Game info for messages
+  const gameInfo = {
+    groupName: gameData.groupNameSnapshot,
+    gameDate: formatGameDate(gameData.gameDate)
+  };
+
+  // Get all players who should receive messages (including payment unit members)
+  const getMessageRecipients = () => {
+    const recipients: Array<{
+      recipientName: string;
+      recipientPhone?: string;
+      type: 'payer' | 'receiver';
+      payments: Array<{ fromName: string; toName: string; amount: number }>;
+    }> = [];
+
+    // Group payments by payer entity
+    const payerGroups = new Map<string, Payment[]>();
+    optimizedPayments.forEach(payment => {
+      const key = payment.from.id;
+      if (!payerGroups.has(key)) {
+        payerGroups.set(key, []);
+      }
+      payerGroups.get(key)!.push(payment);
+    });
+
+    // Group payments by receiver entity
+    const receiverGroups = new Map<string, Payment[]>();
+    optimizedPayments.forEach(payment => {
+      const key = payment.to.id;
+      if (!receiverGroups.has(key)) {
+        receiverGroups.set(key, []);
+      }
+      receiverGroups.get(key)!.push(payment);
+    });
+
+    // Add payers
+    payerGroups.forEach((payments, entityId) => {
+      const entity = payments[0].from;
+      const paymentInfos = payments.map(p => ({
+        fromName: p.from.name,
+        toName: p.to.name,
+        amount: p.amount
+      }));
+
+      if (entity.type === 'unit' && entity.players) {
+        // For payment units, add both players
+        entity.players.forEach(player => {
+          recipients.push({
+            recipientName: player.name,
+            recipientPhone: userPhones.get(player.id),
+            type: 'payer',
+            payments: paymentInfos
+          });
+        });
+      } else {
+        // Individual player
+        recipients.push({
+          recipientName: entity.name,
+          recipientPhone: userPhones.get(entity.id),
+          type: 'payer',
+          payments: paymentInfos
+        });
+      }
+    });
+
+    // Add receivers
+    receiverGroups.forEach((payments, entityId) => {
+      const entity = payments[0].to;
+      const paymentInfos = payments.map(p => ({
+        fromName: p.from.name,
+        toName: p.to.name,
+        amount: p.amount
+      }));
+
+      if (entity.type === 'unit' && entity.players) {
+        // For payment units, add both players
+        entity.players.forEach(player => {
+          recipients.push({
+            recipientName: player.name,
+            recipientPhone: userPhones.get(player.id),
+            type: 'receiver',
+            payments: paymentInfos
+          });
+        });
+      } else {
+        // Individual player
+        recipients.push({
+          recipientName: entity.name,
+          recipientPhone: userPhones.get(entity.id),
+          type: 'receiver',
+          payments: paymentInfos
+        });
+      }
+    });
+
+    return recipients;
+  };
+
+  // Handle copy group message to clipboard
+  const handleCopyGroupMessage = async () => {
+    const payments = optimizedPayments.map(p => ({
+      fromName: p.from.name,
+      toName: p.to.name,
+      amount: p.amount
+    }));
+
+    const message = generateGroupMessage(payments, gameInfo);
+    const success = await copyToClipboard(message);
+
+    if (success) {
+      Alert.alert('הועתק!', 'ההודעה הועתקה ללוח. כעת ניתן להדביק אותה בקבוצת WhatsApp.');
+    } else {
+      Alert.alert('שגיאה', 'לא ניתן להעתיק את ההודעה');
+    }
+  };
+
+  // Handle sending individual messages
+  const handleSendIndividualMessages = async () => {
+    const recipients = getMessageRecipients();
+
+    // Filter recipients with valid phone numbers
+    const validRecipients = recipients.filter(r => r.recipientPhone);
+    const invalidRecipients = recipients.filter(r => !r.recipientPhone);
+
+    if (validRecipients.length === 0) {
+      Alert.alert(
+        'אין מספרי טלפון',
+        'לא נמצאו מספרי טלפון לשחקנים. יש לוודא שהמספרים מוגדרים במערכת.'
+      );
+      return;
+    }
+
+    // Prepare messages
+    const messages = validRecipients.map(r => ({
+      recipientName: r.recipientName,
+      recipientPhone: r.recipientPhone!,
+      message: r.type === 'payer'
+        ? generatePayerMessage(r.recipientName, r.payments, gameInfo)
+        : generateReceiverMessage(r.recipientName, r.payments, gameInfo)
+    }));
+
+    // Warn about missing phone numbers
+    if (invalidRecipients.length > 0) {
+      const missingNames = invalidRecipients.map(r => r.recipientName).join(', ');
+      Alert.alert(
+        'שים לב',
+        `לא נמצאו מספרי טלפון עבור: ${missingNames}\nיישלחו ${messages.length} הודעות.`,
+        [
+          { text: 'ביטול', style: 'cancel' },
+          { text: 'המשך', onPress: () => startSendingMessages(messages) }
+        ]
+      );
+    } else {
+      startSendingMessages(messages);
+    }
+  };
+
+  // Start the sequential message sending process
+  const startSendingMessages = (messages: Array<{ recipientName: string; recipientPhone: string; message: string }>) => {
+    setPendingMessages(messages);
+    setMessageProgress({ current: 0, total: messages.length });
+    setSendingMessages(true);
+    setShowMessageDialog(true);
+  };
+
+  // Send the next pending message
+  const sendNextMessage = async () => {
+    if (pendingMessages.length === 0) {
+      setSendingMessages(false);
+      setShowMessageDialog(false);
+      Alert.alert('הושלם!', 'כל ההודעות נשלחו בהצלחה.');
+      return;
+    }
+
+    const [nextMessage, ...remaining] = pendingMessages;
+
+    const success = await openWhatsAppWithMessage(nextMessage.recipientPhone, nextMessage.message);
+
+    if (success) {
+      setPendingMessages(remaining);
+      setMessageProgress(prev => ({ ...prev, current: prev.current + 1 }));
+    } else {
+      Alert.alert(
+        'שגיאה',
+        `לא ניתן לשלוח הודעה ל${nextMessage.recipientName}`,
+        [
+          { text: 'דלג', onPress: () => {
+            setPendingMessages(remaining);
+            setMessageProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          }},
+          { text: 'נסה שוב', onPress: sendNextMessage }
+        ]
+      );
+    }
+  };
+
+  // Cancel sending messages
+  const cancelSendingMessages = () => {
+    setSendingMessages(false);
+    setShowMessageDialog(false);
+    setPendingMessages([]);
+    setMessageProgress({ current: 0, total: 0 });
+  };
+
+  // Count total messages
+  const totalMessageCount = getMessageRecipients().length;
+
   // Get formatted date for display
   const displayDate = formatGameDate(gameData.gameDate);
 
@@ -360,7 +621,7 @@ export default function PaymentCalculations() {
               {payments.map((payment, index) => (
                 <View key={index} style={styles.paymentRow}>
                   <Text style={styles.receiverName}>
-                    {`${payment.amount.toFixed(0)} ש"ח ל${payment.to.type === 'unit' ? payment.to.name : payment.to.name}`}
+                    {`${payment.amount.toFixed(0)} ש"ח ל${payment.to.name}`}
                   </Text>
                 </View>
               ))}
@@ -377,6 +638,31 @@ export default function PaymentCalculations() {
         ))}
       </ScrollView>
 
+      {/* WhatsApp Buttons */}
+      <View style={styles.whatsappSection}>
+        <TouchableOpacity
+          style={styles.copyGroupButton}
+          onPress={handleCopyGroupMessage}
+        >
+          <Icon name="content-save" size="small" color="#FFD700" />
+          <Text style={styles.whatsappButtonText}>העתק הודעה לקבוצה</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.sendIndividualButton}
+          onPress={handleSendIndividualMessages}
+          disabled={sendingMessages}
+        >
+          <Icon name="whatsapp" size="small" color="#25D366" />
+          <Text style={styles.whatsappButtonText}>
+            {sendingMessages
+              ? `שולח... (${messageProgress.current}/${messageProgress.total})`
+              : `שלח הודעות פרטיות (${totalMessageCount})`
+            }
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Footer */}
       {canContinue && (
         <View style={styles.footer}>
@@ -388,6 +674,20 @@ export default function PaymentCalculations() {
           />
         </View>
       )}
+
+      {/* Message Sending Dialog */}
+      <Dialog
+        visible={showMessageDialog}
+        title="שליחת הודעות WhatsApp"
+        message={pendingMessages.length > 0
+          ? `הודעה הבאה: ${pendingMessages[0]?.recipientName}\n\nלחץ "שלח הבא" לפתיחת WhatsApp`
+          : 'כל ההודעות נשלחו!'
+        }
+        onCancel={cancelSendingMessages}
+        onConfirm={sendNextMessage}
+        confirmText={pendingMessages.length > 0 ? "שלח הבא" : "סיום"}
+        cancelText="ביטול"
+      />
       
       {/* Exit Confirmation Dialog */}
       <Dialog
@@ -489,6 +789,41 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 16,
     textAlign: 'right',
+  },
+  whatsappSection: {
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  copyGroupButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    gap: 10,
+  },
+  sendIndividualButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(37, 211, 102, 0.15)',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#25D366',
+    gap: 10,
+  },
+  whatsappButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   totalRow: {
     flexDirection: 'row-reverse',

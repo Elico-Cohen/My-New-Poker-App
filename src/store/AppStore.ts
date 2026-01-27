@@ -119,6 +119,17 @@ class AppStore {
   public getGame(id: string): Game | undefined {
     return this.state.games.get(id);
   }
+
+  // מחיקת משחק מהמטמון
+  public deleteGame(id: string): boolean {
+    const deleted = this.state.games.delete(id);
+    if (deleted) {
+      this.state.dataStatus.games.lastUpdated = Date.now();
+      this.notifyListeners('games');
+      console.log(`AppStore: משחק ${id} נמחק מהמטמון`);
+    }
+    return deleted;
+  }
   
   // קבלת כל הקבוצות עם אפשרות סינון
   public getGroups(options: { activeOnly?: boolean } = {}): Group[] {

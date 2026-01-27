@@ -1,19 +1,19 @@
 /**
  * גשר בין פונקציות פיננסיות ישנות לחדשות
- * 
+ *
  * מספק ממשק תואם לפונקציות הישנות תוך שימוש בפונקציות החדשות
  */
 
 import { Game } from '../../models/Game';
-import { 
-  calculateProfitDistribution, 
-  calculateMoneyFlow,
+import {
+  calculateProfitDistribution,
+  calculateInvestmentDistribution as calcInvestmentDist,
   calculateCumulativeProfit,
   calculateExtremeProfit,
   ProfitDistributionParams,
   ProfitDistributionResult,
-  MoneyFlowParams,
-  MoneyFlowResult,
+  InvestmentDistributionParams,
+  InvestmentDistributionResult,
   CumulativeProfitParams,
   CumulativeProfitResult,
   ExtremeProfitParams,
@@ -29,8 +29,8 @@ import {
  * @returns התפלגות רווח
  */
 export function calculateProfitDistributionLegacy(
-  games: Game[], 
-  timeFilter?: string, 
+  games: Game[],
+  timeFilter?: string,
   groupId?: string
 ): ProfitDistributionResult {
   const params: ProfitDistributionParams = {
@@ -38,21 +38,21 @@ export function calculateProfitDistributionLegacy(
     timeFilter,
     groupId
   };
-  
+
   const result = calculateProfitDistribution(params);
   return result.data;
 }
 
 /**
- * קבלת התפלגות רווח 
+ * קבלת התפלגות רווח
  * @param games רשימת משחקים
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
  * @returns התפלגות רווח
  */
 export function getProfitDistribution(
-  games: Game[], 
-  timeFilter?: string, 
+  games: Game[],
+  timeFilter?: string,
   groupId?: string
 ): ProfitDistributionResult {
   return calculateProfitDistributionLegacy(games, timeFilter, groupId);
@@ -66,55 +66,70 @@ export function getProfitDistribution(
  * @returns התפלגות השקעה
  */
 export function calculateInvestmentDistribution(
-  games: Game[], 
-  timeFilter?: string, 
+  games: Game[],
+  timeFilter?: string,
   groupId?: string
-): ProfitDistributionResult {
-  const params: ProfitDistributionParams = {
+): InvestmentDistributionResult {
+  const params: InvestmentDistributionParams = {
     games,
     timeFilter,
-    groupId,
-    metric: 'investment'
+    groupId
   };
-  
-  const result = calculateProfitDistribution(params);
+
+  const result = calcInvestmentDist(params);
   return result.data;
 }
 
 /**
  * חישוב זרימת כספים בין שחקנים
+ * Note: calculateMoneyFlow is not implemented in the new calculation module
+ * This function is a stub that returns empty data
+ * @param games רשימת משחקים
+ * @param timeFilter סינון לפי זמן (אופציונלי)
+ * @param groupId סינון לפי קבוצה (אופציונלי)
+ * @returns נתוני זרימת כספים (empty stub)
+ */
+export function calculateMoneyFlowLegacy(
+  games: Game[],
+  timeFilter?: string,
+  groupId?: string
+): { nodes: any[]; links: any[]; totalFlowAmount: number } {
+  // Stub implementation - money flow calculation not yet implemented
+  console.warn('calculateMoneyFlowLegacy: Not yet implemented in new calculation module');
+  return {
+    nodes: [],
+    links: [],
+    totalFlowAmount: 0
+  };
+}
+
+/**
+ * קבלת זרימת כספים
  * @param games רשימת משחקים
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
  * @returns נתוני זרימת כספים
  */
-export function calculateMoneyFlowLegacy(
-  games: Game[], 
-  timeFilter?: string, 
+export function getMoneyFlow(
+  games: Game[],
+  timeFilter?: string,
   groupId?: string
-): MoneyFlowResult {
-  const params: MoneyFlowParams = {
-    games,
-    timeFilter,
-    groupId
-  };
-  
-  const result = calculateMoneyFlow(params);
-  return result.data;
+): { nodes: any[]; links: any[]; totalFlowAmount: number } {
+  return calculateMoneyFlowLegacy(games, timeFilter, groupId);
 }
 
 /**
- * חישוב רווח מצטבר לאורך משחקים
+ * חישוב רווח מצטבר לשחקן
  * @param games רשימת משחקים
  * @param userId מזהה שחקן
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
- * @returns רשימת רווח מצטבר
+ * @returns רשימת רווחים מצטברים
  */
-export function getCumulativeProfitList(
-  games: Game[], 
+export function calculateCumulativeProfitLegacy(
+  games: Game[],
   userId: string,
-  timeFilter?: string, 
+  timeFilter?: string,
   groupId?: string
 ): CumulativeProfitResult {
   const params: CumulativeProfitParams = {
@@ -123,107 +138,100 @@ export function getCumulativeProfitList(
     timeFilter,
     groupId
   };
-  
+
   const result = calculateCumulativeProfit(params);
   return result.data;
 }
 
 /**
- * חישוב רשימת הרווחים הגדולים ביותר במשחק בודד
+ * קבלת רווח מצטבר
  * @param games רשימת משחקים
- * @param limit מספר התוצאות המקסימלי
+ * @param userId מזהה שחקן
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
- * @returns רשימת הרווחים הגדולים ביותר
+ * @returns רשימת רווחים מצטברים
  */
-export function getBestSingleGameProfitList(
-  games: Game[], 
+export function getCumulativeProfit(
+  games: Game[],
+  userId: string,
+  timeFilter?: string,
+  groupId?: string
+): CumulativeProfitResult {
+  return calculateCumulativeProfitLegacy(games, userId, timeFilter, groupId);
+}
+
+/**
+ * חישוב המשחקים עם הרווח/הפסד הגבוה ביותר
+ * @param games רשימת משחקים
+ * @param type סוג חישוב - 'best' או 'worst'
+ * @param limit מספר תוצאות מקסימלי
+ * @param timeFilter סינון לפי זמן (אופציונלי)
+ * @param groupId סינון לפי קבוצה (אופציונלי)
+ * @returns רשימת משחקים קיצוניים
+ */
+export function calculateExtremeProfitLegacy(
+  games: Game[],
+  type: 'best' | 'worst',
   limit: number = 5,
-  timeFilter?: string, 
+  timeFilter?: string,
   groupId?: string
 ): ExtremeProfitResult {
   const params: ExtremeProfitParams = {
     games,
-    type: 'best',
+    type,
     limit,
     timeFilter,
     groupId
   };
-  
+
   const result = calculateExtremeProfit(params);
   return result.data;
 }
 
 /**
- * חישוב רשימת ההפסדים הגדולים ביותר במשחק בודד
+ * קבלת המשחקים עם הרווח הגבוה ביותר
  * @param games רשימת משחקים
- * @param limit מספר התוצאות המקסימלי
+ * @param limit מספר תוצאות מקסימלי
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
- * @returns רשימת ההפסדים הגדולים ביותר
+ * @returns רשימת משחקים עם רווח מקסימלי
  */
-export function getWorstSingleGameLossList(
-  games: Game[], 
+export function getBestProfitGames(
+  games: Game[],
   limit: number = 5,
-  timeFilter?: string, 
+  timeFilter?: string,
   groupId?: string
 ): ExtremeProfitResult {
-  const params: ExtremeProfitParams = {
-    games,
-    type: 'worst',
-    limit,
-    timeFilter,
-    groupId
-  };
-  
-  const result = calculateExtremeProfit(params);
-  return result.data;
+  return calculateExtremeProfitLegacy(games, 'best', limit, timeFilter, groupId);
 }
 
 /**
- * ניקוי מטמון נתוני זרימת הכספים
- */
-export function clearMoneyFlowCache(): void {
-  // השתמש ישירות ב-CacheManager במקום ייבוא דינמי
-  CacheManager.invalidateCategory('moneyFlow');
-}
-
-/**
- * קבלת נתוני רשת זרימת כספים
+ * קבלת המשחקים עם ההפסד הגבוה ביותר
  * @param games רשימת משחקים
+ * @param limit מספר תוצאות מקסימלי
  * @param timeFilter סינון לפי זמן (אופציונלי)
  * @param groupId סינון לפי קבוצה (אופציונלי)
- * @returns נתוני רשת זרימת כספים
+ * @returns רשימת משחקים עם הפסד מקסימלי
  */
-export function getMoneyFlowNetwork(
-  games: Game[], 
-  timeFilter?: string, 
+export function getWorstProfitGames(
+  games: Game[],
+  limit: number = 5,
+  timeFilter?: string,
   groupId?: string
-): { nodes: any[], links: any[] } {
-  const params: MoneyFlowParams = {
-    games,
-    timeFilter,
-    groupId
-  };
-  
-  const result = calculateMoneyFlow(params);
-  return {
-    nodes: result.data.nodes,
-    links: result.data.links
-  };
+): ExtremeProfitResult {
+  return calculateExtremeProfitLegacy(games, 'worst', limit, timeFilter, groupId);
 }
 
 /**
- * קבלת זרימת כספים בין שחקנים 
- * @param games רשימת משחקים
- * @param timeFilter סינון לפי זמן (אופציונלי)
- * @param groupId סינון לפי קבוצה (אופציונלי)
- * @returns נתוני זרימת כספים
+ * ניקוי מטמון התפלגות רווחים
  */
-export function getMoneyFlow(
-  games: Game[], 
-  timeFilter?: string, 
-  groupId?: string
-): MoneyFlowResult {
-  return calculateMoneyFlowLegacy(games, timeFilter, groupId);
-} 
+export function clearProfitDistributionCache(): void {
+  CacheManager.invalidateCategory('distributions');
+}
+
+/**
+ * ניקוי מטמון חישובים פיננסיים
+ */
+export function clearFinancialCalculationsCache(): void {
+  CacheManager.invalidateCategory('financial');
+}

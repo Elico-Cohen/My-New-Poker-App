@@ -3,6 +3,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Icon } from '@/components/common/Icon';
+import { IconName } from '@/theme/icons';
 
 // Define casino theme colors
 const CASINO_COLORS = {
@@ -112,9 +113,9 @@ export function PlayersRanking({
   };
   
   // Helper to get appropriate medal icon for top ranks
-  const getMedalIcon = (rank: number): string | null => {
+  const getMedalIcon = (rank: number): IconName | null => {
     if (!medalRanks) return null;
-    
+
     switch (rank) {
       case 1: return 'medal';
       case 2: return 'medal-outline';

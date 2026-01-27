@@ -107,11 +107,11 @@ export const calculateGameSummary: CalculationFunction<GameSummaryParams, GameSu
     const totalInvestment = (buyInAmount * totalInitialBuyIns) + (rebuyAmount * totalRebuys);
     const averageRebuysPerPlayer = totalPlayers > 0 ? totalRebuys / totalPlayers : 0;
     
-    // חישוב משך זמן המשחק
+    // חישוב משך זמן המשחק (using createdAt and updatedAt since startTime/endTime don't exist)
     let duration;
-    if (game.startTime && game.endTime) {
-      const startTime = new Date(game.startTime).getTime();
-      const endTime = new Date(game.endTime).getTime();
+    if (game.createdAt && game.updatedAt && game.status === 'completed') {
+      const startTime = game.createdAt;
+      const endTime = game.updatedAt;
       duration = Math.floor((endTime - startTime) / (1000 * 60)); // במספר דקות
     }
     
@@ -144,7 +144,7 @@ export const calculateGameSummary: CalculationFunction<GameSummaryParams, GameSu
       totalInitialBuyIns,
       totalRebuys,
       averageRebuysPerPlayer,
-      finishedDate: game.endTime ? new Date(game.endTime) : undefined,
+      finishedDate: (game.status === 'completed' && game.updatedAt) ? new Date(game.updatedAt) : undefined,
       duration,
       profitDistribution: {
         winners,

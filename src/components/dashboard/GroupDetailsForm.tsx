@@ -82,6 +82,7 @@ export function GroupDetailsForm({
           />
         ) : (
           <PlayersTab
+            groupId={initialData.id || ''}
             permanentPlayers={initialData.permanentPlayers || []}
             guestPlayers={initialData.guestPlayers || []}
             onChange={handlePlayersChange}

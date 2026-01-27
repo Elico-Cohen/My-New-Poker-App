@@ -4,7 +4,7 @@ import { Text } from '@/components/common/Text';
 import { Button } from '@/components/common/Button';
 import { Icon } from '@/components/common/Icon';
 import { UserProfile } from '@/models/UserProfile';
-import { Game } from '@/models/Game';
+import { GameData } from '@/contexts/GameContext';
 
 const CASINO_COLORS = {
   background: '#0D1B1E',
@@ -16,7 +16,7 @@ const CASINO_COLORS = {
 
 interface HandoffDialogProps {
   visible: boolean;
-  currentGame: Game;
+  currentGame: GameData;
   currentUser: UserProfile;
   eligibleUsers: UserProfile[];
   onHandoff: (newOwnerAuthUid: string, reason?: string) => Promise<void>;
@@ -38,8 +38,16 @@ export const HandoffDialog: React.FC<HandoffDialogProps> = ({
   // Get current owner name from game
   const currentOwnerName = currentUser.name;
 
-  // Filter eligible users (admin/super, active, not self)
+  // Get player IDs from the current game
+  const gamePlayerIds = new Set(currentGame.players?.map(p => p.id) || []);
+
+  // Filter eligible users:
+  // 1. Must be participating in the current game
+  // 2. Must be admin or super user
+  // 3. Must be active
+  // 4. Must not be the current game owner
   const filteredUsers = eligibleUsers.filter(u =>
+    gamePlayerIds.has(u.id) &&
     (u.role === 'admin' || u.role === 'super') &&
     u.isActive &&
     u.authUid !== currentGame.createdBy
@@ -125,7 +133,10 @@ export const HandoffDialog: React.FC<HandoffDialogProps> = ({
 
               {filteredUsers.length === 0 ? (
                 <View style={styles.noUsersContainer}>
-                  <Text style={styles.noUsersText}>אין משתמשים זמינים להעברה</Text>
+                  <Text style={styles.noUsersText}>
+                    אין משתמשים זמינים להעברה.{'\n'}
+                    רק שחקנים המשתתפים במשחק עם הרשאות מנהל/על יכולים לקבל שליטה.
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.userList}>

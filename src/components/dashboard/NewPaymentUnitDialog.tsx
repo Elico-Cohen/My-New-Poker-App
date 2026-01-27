@@ -172,7 +172,6 @@ export function NewPaymentUnitDialog({
   return (
     <Dialog
       visible={visible}
-      onClose={onClose}
       title="יצירת יחידת תשלום חדשה"
       message=""
       onConfirm={handleSave}

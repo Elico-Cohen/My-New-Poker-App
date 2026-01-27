@@ -1,13 +1,39 @@
 /**
  * מודול חישובים מרכזי
- * 
+ *
  * מייצא את כל פונקציות החישוב והטיפוסים הנדרשים
  */
 
-// ייצוא טיפוסים בסיסיים
-export * from './core/types';
+// ייצוא טיפוסים בסיסיים (selective to avoid duplicates)
+export {
+  CalculationMetadata,
+  CalculationResult,
+  CalculationOptions,
+  TimeFilter,
+  GameFilter,
+  CalculationFunction,
+  BaseCalculationParams,
+  PlayerStatsParams,
+  PlayerStatsResult,
+  PlayerRankingParams,
+  PlayerRankingResult,
+  GameResultsParams,
+  GameResultsResult,
+  MoneyFlowParams,
+  MoneyFlowResult,
+  // Re-export model types
+  Game,
+  GameDate,
+  PlayerInGame,
+  Payment,
+  RebuyLog,
+  OpenGame,
+  HandoffEvent,
+  UserProfile,
+  Group
+} from './core/types';
 export * from './core/constants';
-export * from './core/utils';
+export { getCacheKey, filterGames, didPlayerWin, createCalculationResult } from './core/utils';
 
 // ייצוא מנהל מטמון
 import { CacheManager } from './cache/CacheManager';
@@ -17,22 +43,36 @@ export { CacheManager };
 export { calculatePlayerStats } from './player/stats';
 export { calculatePlayerRanking } from './player/ranking';
 
-// ייצוא פונקציות חישוב משחק
-// לחלופין ניתן להשתמש ב: export * from './game/results';
-// כרגע הפונקציות לא קיימות לכן יש להסיר אותן מהייצוא הספציפי עד שיממשו
-export * from './game/results';
-export * from './game/payments';
+// ייצוא פונקציות חישוב משחק (functions only, types defined locally in files)
+export { calculateGameSummary, GameSummaryParams, GameSummaryResult } from './game/results';
+export { calculateOptimalPayments, OptimalPaymentsParams, OptimalPaymentsResult } from './game/payments';
 
 // ייצוא פונקציות חישוב פיננסי
-// לחלופין ניתן להשתמש ב: export * from './financial/profit';
-// כרגע הפונקציות לא קיימות לכן יש להסיר אותן מהייצוא הספציפי עד שיממשו
-export * from './financial/profit';
+export {
+  calculateCumulativeProfit,
+  calculateExtremeProfit,
+  CumulativeProfitParams,
+  CumulativeProfitResult,
+  ExtremeProfitParams,
+  ExtremeProfitResult
+} from './financial/profit';
 
 // ייצוא פונקציות חישוב התפלגויות
-export * from './distributions/profit';
+export {
+  calculateProfitDistribution,
+  calculateInvestmentDistribution,
+  ProfitDistributionParams,
+  ProfitDistributionResult,
+  InvestmentDistributionParams,
+  InvestmentDistributionResult
+} from './distributions/profit';
 
 // ייצוא פונקציות חישוב מגמות זמן
-export * from './time/trends';
+export {
+  calculateTimeTrend,
+  TimeTrendParams,
+  TimeTrendResult
+} from './time/trends';
 
 /**
  * ניקוי כל המטמון של מערכת החישובים

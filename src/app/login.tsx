@@ -1,6 +1,6 @@
 // src/app/login.tsx
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, TextInput, ActivityIndicator, Alert, BackHandler } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
@@ -9,7 +9,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginInProgress, setLoginInProgress] = useState(false);
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+  const { login, isAuthenticated, isLoading, error, clearError, user } = useAuth();
   
   // לוג פשוט רק במאונט/אנמאונט
   useEffect(() => {
@@ -19,19 +19,35 @@ export default function LoginScreen() {
     return () => console.log("Login screen unmounted");
   }, []);
 
+  // טיפול בכפתור חזרה של אנדרואיד - יציאה מהאפליקציה
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // יציאה מהאפליקציה כאשר נמצאים במסך הלוגין
+      BackHandler.exitApp();
+      return true; // מונע התנהגות ברירת מחדל
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
   useEffect(() => {
     // רק לוג חשוב - לא בכל שינוי מצב
-    if (isAuthenticated && !isLoading) {
-      console.log('Login successful - redirecting to home');
-      // ניווט מיידי ללא timeout
-      router.replace('/(tabs)/home2');
+    if (isAuthenticated && !isLoading && user) {
+      // Check if user must change password first
+      if (user.mustChangePassword) {
+        console.log('Login successful - user must change password');
+        router.replace('/change-password');
+      } else {
+        console.log('Login successful - redirecting to home');
+        router.replace('/(tabs)/home2');
+      }
     }
-    
+
     // עדכון מצב הטעינה המקומי לפי מצב הטעינה הכללי
     if (!isLoading) {
       setLoginInProgress(false);
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, user]);
 
   // פונקציה לטיפול בכניסה למערכת
   const handleLogin = async () => {

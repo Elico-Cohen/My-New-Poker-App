@@ -35,7 +35,7 @@ export function GroupDialog({
   const [rebuyAmount, setRebuyAmount] = React.useState(group?.rebuy.amount.toString() || '');
   const [useRoundingRule, setUseRoundingRule] = React.useState(group?.useRoundingRule || false);
   const [roundingRulePercentage, setRoundingRulePercentage] = React.useState(
-    group?.roundingRulePercentage.toString() || '80'
+    group?.roundingRulePercentage?.toString() || '80'
   );
 
   // Reset form when dialog is opened
@@ -92,6 +92,8 @@ export function GroupDialog({
 
       const newGroup = {
         name: name.trim(),
+        currency: group?.currency || '₪',
+        createdBy: group?.createdBy || '',
         buyIn: {
           chips: buyInChipsNum,
           amount: buyInAmountNum

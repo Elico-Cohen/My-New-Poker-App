@@ -59,7 +59,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
             text: "צא",
             onPress: () => {
               if (backTo) {
-                router.push(backTo);
+                router.push(backTo as any);
               } else {
                 router.back();
               }
@@ -70,7 +70,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
     } else {
       // Navigate directly if no confirmation needed
       if (backTo) {
-        router.push(backTo);
+        router.push(backTo as any);
       } else {
         router.back();
       }

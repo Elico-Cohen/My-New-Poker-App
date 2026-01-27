@@ -1,6 +1,6 @@
 // src/contexts/GameContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { GameDate, Game, PlayerInGame } from '@/models/Game';  // Import the needed types
+import { GameDate, Game, PlayerInGame, HandoffEvent } from '@/models/Game';  // Import the needed types
 import { 
   saveOrUpdateActiveGame, 
   getActiveGameById, 
@@ -170,9 +170,13 @@ export interface GameData {
   createdAt?: number;            // זמן יצירת המשחק
   updatedAt?: number;            // זמן עדכון אחרון בשרת
   createdBy?: string;            // מזהה המשתמש שיצר את המשחק
-  lastSyncAt?: number;           // זמן סנכרון אחרון עם השרת  
+  lastSyncAt?: number;           // זמן סנכרון אחרון עם השרת
   localModifiedAt?: number;      // זמן שינוי מקומי אחרון
   syncVersion?: number;          // גרסת סנכרון למניעת קונפליקטים
+
+  // העברת שליטה (Game Handoff)
+  originalCreatedBy?: string;    // מזהה המשתמש המקורי שיצר את המשחק (authUid) - לעולם לא משתנה
+  handoffLog?: HandoffEvent[];   // היסטוריית העברות שליטה במשחק
 }
 
 // Helper function to create GameDate from current date

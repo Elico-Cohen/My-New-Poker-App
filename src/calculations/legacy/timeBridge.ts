@@ -28,8 +28,8 @@ export function getProfitTrendByTime(
   const params: TimeTrendParams = {
     games,
     metric: 'profit',
-    interval,
-    timeFilter,
+    timeUnit: interval,
+    // Note: timeFilter is ignored - the new API uses startDate/endDate filtering instead
     groupId
   };
   
@@ -54,8 +54,8 @@ export function getGamesCountTrendByTime(
   const params: TimeTrendParams = {
     games,
     metric: 'games',
-    interval,
-    timeFilter,
+    timeUnit: interval,
+    // Note: timeFilter is ignored - the new API uses startDate/endDate filtering instead
     groupId
   };
   
@@ -80,8 +80,8 @@ export function getInvestmentTrendByTime(
   const params: TimeTrendParams = {
     games,
     metric: 'investment',
-    interval,
-    timeFilter,
+    timeUnit: interval,
+    // Note: timeFilter is ignored - the new API uses startDate/endDate filtering instead
     groupId
   };
   
@@ -108,9 +108,9 @@ export function getWinRateTrendByTime(
   const params: TimeTrendParams = {
     games,
     metric: 'winRate',
-    interval,
+    timeUnit: interval,
     userId,
-    timeFilter,
+    // Note: timeFilter is ignored - the new API uses startDate/endDate filtering instead
     groupId
   };
   

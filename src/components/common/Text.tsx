@@ -25,7 +25,7 @@ export function Text({
   return (
     <RNText
       style={[
-        Typography.styles[variant],
+        variant ? Typography.styles[variant] : Typography.styles.bodyNormal,
         {
           color: color || theme.textPrimary,
           textAlign: align,

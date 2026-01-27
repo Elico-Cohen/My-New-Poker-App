@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { Text } from './Text';
 import { Icon } from './Icon';
+import { IconName } from '@/theme/icons';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -56,7 +57,7 @@ export const SaveIndicator: React.FC<SaveIndicatorProps> = ({
   });
   
   // בחירת האייקון והטקסט בהתאם למצב
-  let iconName = '';
+  let iconName: IconName = 'content-save-outline';
   let statusText = '';
   let iconColor = '';
   

@@ -34,12 +34,14 @@ const CASINO_COLORS = {
   text: '#FFFFFF'
 };
 
-interface UserDetails extends UserProfile {
-  groups: {
-    groupId: string;
-    groupName: string;
-    isPermanent: boolean;
-  }[];
+interface EnrichedGroup {
+  groupId: string;
+  groupName: string;
+  isPermanent: boolean;
+}
+
+interface UserDetails extends Omit<UserProfile, 'groups'> {
+  groups: EnrichedGroup[];
   paymentUnit?: {
     unitId: string;
     unitName: string;
@@ -671,7 +673,7 @@ export default function UsersScreen() {
             setSelectedUser(null);
             loadData();
           }}
-          user={selectedUser}
+          user={selectedUser as unknown as UserProfile}
           userGroups={selectedUser.groups}
         />
       )}

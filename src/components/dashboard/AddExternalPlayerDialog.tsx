@@ -37,12 +37,11 @@ export default function AddExternalPlayerDialog({
     <Dialog
       visible={visible}
       title="הוספת שחקנים"
+      message=""
       confirmText="אישור"
       cancelText="סגור"
       onConfirm={onConfirm}
       onCancel={onCancel}
-      containerStyle={styles.dialogContainer}
-      style={styles.dialogStyle}
     >
       <View style={styles.wrapper}>
         {/* כפתור "הוסף שחקן חדש" בראש הדיאלוג */}

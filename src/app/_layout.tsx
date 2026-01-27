@@ -193,10 +193,20 @@ function RootLayoutNav() {
         />
         
         {/* מסך רישום */}
-        <Stack.Screen 
-          name="register" 
-          options={{ 
+        <Stack.Screen
+          name="register"
+          options={{
             title: 'הרשמה',
+            headerShown: false,
+            animation: 'slide_from_right'
+          }}
+        />
+
+        {/* מסך שינוי סיסמה */}
+        <Stack.Screen
+          name="change-password"
+          options={{
+            title: 'שינוי סיסמה',
             headerShown: false,
             animation: 'slide_from_right'
           }}

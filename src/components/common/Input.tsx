@@ -5,12 +5,13 @@ import Typography from '@/theme/typography';
 import { useColorScheme } from '@/components/useColorScheme';
 import { Icon } from './Icon';
 import { IconName } from '@/theme/icons';
+import { Text } from './Text';
 
-interface InputProps {
+export interface InputProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  keyboardType?: 'default' | 'numeric' | 'phone-pad';
+  keyboardType?: 'default' | 'numeric' | 'phone-pad' | 'email-address';
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   style?: StyleProp<ViewStyle>;
@@ -18,6 +19,8 @@ interface InputProps {
   editable?: boolean;
   clearable?: boolean;
   onClear?: () => void;
+  label?: string;
+  error?: string | null;
 }
 
 export function Input({
@@ -32,13 +35,15 @@ export function Input({
   editable = true,
   clearable = false,
   onClear,
+  label,
+  error,
 }: InputProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
 
   const baseInputStyle: TextStyle = {
     backgroundColor: theme.surface,
-    borderColor: theme.border,
+    borderColor: error ? theme.error : theme.border,
     color: theme.textPrimary,
     ...Typography.styles.bodyNormal,
     textAlign: 'right',
@@ -47,31 +52,46 @@ export function Input({
   };
 
   return (
-    <View style={[styles.container, style]}>
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={theme.textDisabled}
-      keyboardType={keyboardType}
-      secureTextEntry={secureTextEntry}
-      autoCapitalize={autoCapitalize}
-      editable={editable}
-      style={[
-          baseInputStyle,
-        inputStyle,
-      ]}
-    />
-      {clearable && value && (
-        <TouchableOpacity onPress={onClear} style={styles.clearButton}>
-          <Icon name="close-circle" size="small" color={theme.textSecondary} />
-        </TouchableOpacity>
+    <View style={[styles.wrapper, style]}>
+      {label && (
+        <Text variant="bodySmall" style={styles.label} color={theme.textSecondary}>
+          {label}
+        </Text>
+      )}
+      <View style={styles.container}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.textDisabled}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          editable={editable}
+          style={[
+            baseInputStyle,
+            inputStyle,
+          ]}
+        />
+        {clearable && value && (
+          <TouchableOpacity onPress={onClear} style={styles.clearButton}>
+            <Icon name="close-circle" size="small" color={theme.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {error && (
+        <Text variant="bodySmall" style={styles.error} color={theme.error}>
+          {error}
+        </Text>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    width: '100%',
+  },
   container: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -79,6 +99,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderColor: 'transparent',
     width: '100%',
+  },
+  label: {
+    marginBottom: 4,
+    textAlign: 'right',
+  },
+  error: {
+    marginTop: 4,
+    textAlign: 'right',
   },
   input: {
     paddingVertical: 12,

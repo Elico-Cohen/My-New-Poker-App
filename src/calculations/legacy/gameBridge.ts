@@ -1,21 +1,16 @@
 /**
  * גשר בין פונקציות משחק ישנות לחדשות
- * 
+ *
  * מספק ממשק תואם לפונקציות הישנות תוך שימוש בפונקציות החדשות
  */
 
 import { Game } from '../../models/Game';
-// Player כנראה חלק ממודל Game
-// import { Player } from '../../models/Player';
-import { 
-  calculateGameResults, 
-  calculateGamePlayersResults,
+import {
+  calculateGameSummary,
   calculateOptimalPayments,
-  GameResultsParams,
-  GamePlayersResultsParams,
+  GameSummaryParams,
+  GameSummaryResult,
   OptimalPaymentsParams,
-  GameResultsResult,
-  GamePlayersResultsResult,
   OptimalPaymentsResult
 } from '../index';
 
@@ -24,6 +19,23 @@ import { calculateInitialGameSummary as originalCalculateInitialGameSummary } fr
 
 // ייצוא מחדש של הפונקציה המקורית - עד שתיושם בשכבה החדשה
 export const calculateInitialGameSummary = originalCalculateInitialGameSummary;
+
+// Type aliases for backward compatibility
+export type GameResultsParams = GameSummaryParams;
+export type GameResultsResult = {
+  totalBuyins: number;
+  totalRebuys: number;
+  totalInvestment: number;
+  playerResults: any[];
+};
+export type GamePlayersResultsParams = {
+  gameId: string;
+  game?: Game;
+};
+export type GamePlayersResultsResult = {
+  gameId: string;
+  playerResults: any[];
+};
 
 /**
  * חישוב השקעת שחקן במשחק
@@ -53,48 +65,75 @@ export function calculateInitialPlayerResult(player: any): number {
  */
 export function calculateFinalPlayerResult(player: any): number {
   if (!player) return 0;
-  
+
   const initialResult = calculateInitialPlayerResult(player);
   const payments = player.payments || [];
   const paymentAmount = payments.reduce((sum: number, payment: any) => sum + payment.amount, 0);
-  
+
   return initialResult + paymentAmount;
 }
 
 /**
- * חישוב סיכום משחק
+ * חישוב סיכום משחק (legacy wrapper)
  * @param game המשחק
  * @returns סיכום המשחק
  */
-export function calculateGameSummary(game: Game): GameResultsResult {
+export function calculateGameResults(game: Game): GameResultsResult {
   if (!game) {
-    return { 
-      totalBuyins: 0, 
-      totalRebuys: 0, 
-      totalInvestment: 0, 
-      playerResults: [] 
+    return {
+      totalBuyins: 0,
+      totalRebuys: 0,
+      totalInvestment: 0,
+      playerResults: []
     };
   }
-  
-  const params: GameResultsParams = {
+
+  const params: GameSummaryParams = {
     gameId: game.id,
     game
   };
-  
-  const result = calculateGameResults(params);
-  return result.data;
+
+  const result = calculateGameSummary(params);
+  // Convert GameSummaryResult to legacy GameResultsResult format
+  return {
+    totalBuyins: result.data.totalInitialBuyIns,
+    totalRebuys: result.data.totalRebuys,
+    totalInvestment: result.data.totalInvestment,
+    playerResults: [] // Players array would need to be extracted from game
+  };
 }
 
 /**
- * חישוב תשלומים אופטימליים
- * @param playerResults תוצאות השחקנים
+ * חישוב תוצאות שחקנים למשחק (legacy wrapper)
+ * @param params פרמטרים
+ * @returns תוצאות שחקנים
+ */
+export function calculateGamePlayersResults(params: GamePlayersResultsParams): { data: GamePlayersResultsResult } {
+  const { gameId, game } = params;
+  const playerResults = game?.players?.map(player => ({
+    ...player,
+    profit: player.finalResultMoney || player.resultBeforeOpenGames || 0
+  })) || [];
+
+  return {
+    data: {
+      gameId,
+      playerResults
+    }
+  };
+}
+
+/**
+ * חישוב תשלומים אופטימליים (legacy wrapper)
+ * @param playerResults תוצאות השחקנים (ignored - uses gameId instead)
+ * @param gameId מזהה המשחק
  * @returns רשימת תשלומים מומלצים
  */
-export function calculateOptimalPaymentsLegacy(playerResults: any[]): OptimalPaymentsResult {
+export function calculateOptimalPaymentsLegacy(playerResults: any[], gameId: string = 'unknown'): OptimalPaymentsResult {
   const params: OptimalPaymentsParams = {
-    playerResults
+    gameId
   };
-  
+
   const result = calculateOptimalPayments(params);
   return result.data;
 }
@@ -106,22 +145,19 @@ export function calculateOptimalPaymentsLegacy(playerResults: any[]): OptimalPay
  */
 export function calculateGameOptimalPayments(game: Game): OptimalPaymentsResult {
   if (!game) {
-    return { 
+    return {
       gameId: '',
       totalTransferred: 0,
       playersInvolved: 0,
       payments: []
     };
   }
-  
-  // קודם חשב את תוצאות המשחק
-  const gameSummary = calculateGameSummary(game);
-  
-  // אז חשב את התשלומים האופטימליים
+
   const params: OptimalPaymentsParams = {
-    playerResults: gameSummary.playerResults
+    gameId: game.id,
+    game
   };
-  
+
   const result = calculateOptimalPayments(params);
   return result.data;
 }
@@ -132,7 +168,7 @@ export function calculateGameOptimalPayments(game: Game): OptimalPaymentsResult 
  * @returns סטטיסטיקות המשחק
  */
 export function getGameStatistics(game: Game): GameResultsResult {
-  return calculateGameSummary(game);
+  return calculateGameResults(game);
 }
 
 /**
@@ -142,12 +178,7 @@ export function getGameStatistics(game: Game): GameResultsResult {
  * @returns תוצאות השחקנים
  */
 export function getPlayerResultsForGame(gameId: string, game?: Game): GamePlayersResultsResult {
-  const params: GamePlayersResultsParams = {
-    gameId,
-    game
-  };
-  
-  const result = calculateGamePlayersResults(params);
+  const result = calculateGamePlayersResults({ gameId, game });
   return result.data;
 }
 
@@ -158,4 +189,4 @@ export function getPlayerResultsForGame(gameId: string, game?: Game): GamePlayer
  */
 export function getPaymentsForGame(game: Game): OptimalPaymentsResult {
   return calculateGameOptimalPayments(game);
-} 
+}

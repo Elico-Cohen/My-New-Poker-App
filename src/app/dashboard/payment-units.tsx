@@ -30,7 +30,7 @@ const CASINO_COLORS = {
   error: '#ef4444'
 };
 
-interface EnrichedPaymentUnit extends PaymentUnit {
+interface EnrichedPaymentUnit extends Omit<PaymentUnit, 'players'> {
   players: {
     id: string;
     name: string;
@@ -448,5 +448,3 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
-
-export default PaymentUnitsScreen;

@@ -14,6 +14,9 @@ import { Group } from '@/models/Group';
 import { getGroupById } from './groups';
 import { verifyAccessControl } from '@/utils/securityAudit';
 import { getLocalGames } from './gameSnapshot';
+import { clearGamesCache } from './gameDataManager';
+import { clearAllStatsCache } from './statistics/statisticsService';
+import { store } from '@/store/AppStore';
 
 // Collection reference
 const gamesCollection = collection(db, 'games');
@@ -541,16 +544,28 @@ export const hasPlayerActiveGames = async (playerId: string): Promise<boolean> =
 export const deleteGame = async (gameId: string): Promise<void> => {
   const game = await getGameById(gameId);
   if (!game) throw new Error('Game not found');
-  
+
   try {
     // 1. מחיקת המשחק מה-Firestore
     const gameRef = doc(db, 'games', gameId);
     await deleteDoc(gameRef);
-    
+
     // 2. עדכון רשימת המשחקים האחרונים בקבוצה אם צריך
     if (game.groupId) {
       await updateGroupRecentGames(game.groupId, gameId, true);
     }
+
+    // 3. ניקוי כל שכבות המטמון
+    // מחיקה מה-AppStore (מטמון המצב המרכזי)
+    store.deleteGame(gameId);
+
+    // ניקוי מטמון המשחקים (gameDataManager)
+    clearGamesCache();
+
+    // ניקוי מטמון הסטטיסטיקות
+    clearAllStatsCache();
+
+    console.log(`Game ${gameId} deleted and all caches invalidated`);
   } catch (error) {
     console.error('Error deleting game:', error);
     throw new Error('Failed to delete game');

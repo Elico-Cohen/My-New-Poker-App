@@ -32,7 +32,7 @@ import { useGameContext } from '@/contexts/GameContext';
 import { Group, ChipsConfig } from '@/models/Group';
 import { useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import { DatePickerDialog } from '@/components/common/DatePickerDialog';
+// Note: DatePickerDialog doesn't exist, using DateTimePicker directly instead
 import { GameDate } from '@/models/Game';
 import { saveOrUpdateActiveGame } from '@/services/gameSnapshot';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -434,7 +434,7 @@ export default function NewGameSetup() {
                   ]}
                 >
                   <View style={styles.playerContent}>
-                    <Text variant="bodyMedium" style={styles.playerText}>
+                    <Text variant="bodyNormal" style={styles.playerText}>
                       {player.name}
                     </Text>
                     {selectedGroupPlayerIds.includes(player.id) && (
@@ -463,7 +463,7 @@ export default function NewGameSetup() {
                     ]}
                   >
                     <View style={styles.playerContent}>
-                      <Text variant="bodyMedium" style={styles.playerText}>
+                      <Text variant="bodyNormal" style={styles.playerText}>
                         {player.name}
                       </Text>
                       {isSelected && (
@@ -509,15 +509,13 @@ export default function NewGameSetup() {
       <Dialog
         visible={showExitDialog}
         title="יציאה מהמשחק"
+        message="האם אתה בטוח שברצונך לצאת? כל הבחירות שלך יאבדו."
         confirmText="צא"
         cancelText="המשך משחק"
         onConfirm={async () => {          setShowExitDialog(false);          await clearActiveGame();          router.push('/(tabs)/home2');        }}
         onCancel={() => setShowExitDialog(false)}
-      >
-        <Text style={{ color: '#c41e3a', textAlign: 'center', marginBottom: 16 }}>
-          האם אתה בטוח שברצונך לצאת? כל הבחירות שלך יאבדו.
-        </Text>
-      </Dialog>
+        type="danger"
+      />
 
       <Dialog
         visible={logDialogVisible}
@@ -549,31 +547,17 @@ export default function NewGameSetup() {
         <Dialog
           visible={showNewPlayerDialog}
           title="הוסף שחקן חדש"
-          onDismiss={() => {
+          message=""
+          confirmText="הוסף"
+          cancelText="ביטול"
+          onConfirm={handleNewPlayerSubmit}
+          onCancel={() => {
             setShowNewPlayerDialog(false);
             setNewPlayerData({ name: '', phone: '', email: '' });
             setNewPlayerNameError(null);
             setNewPlayerEmailError(null);
             setNewPlayerGeneralError(null);
           }}
-          actions={[
-            {
-              text: "ביטול",
-              onPress: () => {
-                setShowNewPlayerDialog(false);
-                setNewPlayerData({ name: '', phone: '', email: '' });
-                setNewPlayerNameError(null);
-                setNewPlayerEmailError(null);
-                setNewPlayerGeneralError(null);
-              },
-              style: "cancel",
-            },
-            {
-              text: "הוסף",
-              onPress: handleNewPlayerSubmit,
-              style: "confirm",
-            },
-          ]}
         >
           <View style={{ padding: 16, gap: 12 }}>
             <Input
@@ -808,4 +792,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NewGameSetup;
+// Note: Default export is at function definition (line 49)

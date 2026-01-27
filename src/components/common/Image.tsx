@@ -23,7 +23,7 @@ export function Image({
   const theme = Colors[colorScheme ?? 'light'];
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={styles.container}>
       <RNImage
         {...props}
         style={[styles.image, style]}

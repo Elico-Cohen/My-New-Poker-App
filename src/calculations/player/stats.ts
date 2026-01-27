@@ -126,7 +126,7 @@ export const calculatePlayerStats: CalculationFunction<PlayerStatsParams, Player
     
     // עבור על כל המשחקים ועדכן את הסטטיסטיקות
     gamesWithPlayer.forEach(game => {
-      const player = game.players.find(p => p.userId === userId);
+      const player = game.players?.find(p => p.userId === userId);
       if (!player) return;
       
       // חישוב השקעה (באי-אין + ריבאיים)

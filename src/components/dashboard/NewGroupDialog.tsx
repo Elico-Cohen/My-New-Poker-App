@@ -184,6 +184,8 @@ export function NewGroupDialog({
       setError(null);
       const newGroup: Omit<Group, 'id' | 'createdAt' | 'updatedAt'> = {
         name: name.trim(),
+        currency: '₪',
+        createdBy: '', // Will be set by the service
         buyIn: {
           chips: parseInt(buyInChips),
           amount: parseInt(buyInAmount),
@@ -209,7 +211,7 @@ export function NewGroupDialog({
   };
 
   return (
-    <Dialog visible={visible} onClose={onClose} title="הוספת קבוצה חדשה">
+    <Dialog visible={visible} onCancel={onClose} onConfirm={handleSave} message="" title="הוספת קבוצה חדשה" hideDefaultButtons>
       <ScrollView style={{ maxHeight: 600 }}>
         <View style={{ gap: 24, padding: 16 }}>
           {error && (
@@ -322,7 +324,7 @@ export function NewGroupDialog({
                         size="small"
                       />
                       <Button
-                        icon="close"
+                        icon="close-circle"
                         variant="ghost"
                         size="small"
                         onPress={() => handlePlayerToggle(player.id)}
@@ -339,8 +341,12 @@ export function NewGroupDialog({
             {/* דיאלוג לבחירת שחקנים עם תיבות סימון */}
             <Dialog
               visible={showPlayerSelection}
-              onClose={() => setShowPlayerSelection(false)}
+              onCancel={() => setShowPlayerSelection(false)}
+              onConfirm={() => setShowPlayerSelection(false)}
               title="בחירת שחקנים"
+              message=""
+              confirmText="סיום"
+              cancelText=""
             >
               <ScrollView style={{ maxHeight: 400 }}>
                 <View style={{ gap: 8, padding: 8 }}>
@@ -352,22 +358,19 @@ export function NewGroupDialog({
                         onPress={() => handlePlayerToggle(player.id)}
                         style={styles.playerRow}
                       >
-                        <Text variant="bodyNormal" style={{ color: theme.text }}>
+                        <Text variant="bodyNormal" style={{ color: theme.textPrimary }}>
                           {player.name}
                         </Text>
                         <Icon
                           name={isSelected ? 'checkbox-marked-outline' : 'checkbox-blank-outline'}
                           size="medium"
-                          color={theme.gold}
+                          color={theme.primary}
                         />
                       </TouchableOpacity>
                     );
                   })}
                 </View>
               </ScrollView>
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                <Button title="סיום" onPress={() => setShowPlayerSelection(false)} />
-              </View>
             </Dialog>
             <Button
               title="הוסף שחקנים"
@@ -396,6 +399,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.light.gold,
+    borderBottomColor: Colors.light.border,
   },
 });

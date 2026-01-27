@@ -137,7 +137,7 @@ export default function StatisticsScreen() {
       // ניווט למסך סטטיסטיקת משחקים
       const navigateToGamesStats = () => {
         console.log('מסך סטטיסטיקה: ניווט למסך סטטיסטיקת משחקים');
-        router.navigate('statistics/games');
+        router.navigate('statistics/games' as any);
       };
       
       // רענון נתונים

@@ -83,9 +83,9 @@ export const calculateCumulativeProfit: CalculationFunction<CumulativeProfitPara
     // מיון המשחקים לפי תאריך
     const sortedGames = [...filteredGames].sort((a, b) => {
       // הנחה שיש לנו מבנה של gameDate שהוא אובייקט עם שדות year, month, day
-      if (a.gameDate && b.gameDate) {
-        const dateA = new Date(a.gameDate.year, a.gameDate.month - 1, a.gameDate.day);
-        const dateB = new Date(b.gameDate.year, b.gameDate.month - 1, b.gameDate.day);
+      if (a.date && b.date) {
+        const dateA = new Date(a.date.year, a.date.month - 1, a.date.day);
+        const dateB = new Date(b.date.year, b.date.month - 1, b.date.day);
         return dateA.getTime() - dateB.getTime();
       }
       return 0;
@@ -118,13 +118,13 @@ export const calculateCumulativeProfit: CalculationFunction<CumulativeProfitPara
       cumulativeProfit += profit;
       
       // יצירת תאריך משחק
-      const gameDate = game.gameDate ? 
-        new Date(game.gameDate.year, game.gameDate.month - 1, game.gameDate.day) : 
+      const gameDate = game.date ? 
+        new Date(game.date.year, game.date.month - 1, game.date.day) : 
         new Date();
       
       items.push({
         gameId: game.id,
-        gameName: game.name,
+        gameName: game.groupNameSnapshot,
         gameDate,
         profit,
         cumulativeProfit
@@ -248,13 +248,13 @@ export const calculateExtremeProfit: CalculationFunction<ExtremeProfitParams, Ex
         const roi = investment > 0 ? (profit / investment) * 100 : 0;
         
         // יצירת תאריך משחק
-        const gameDate = game.gameDate ? 
-          new Date(game.gameDate.year, game.gameDate.month - 1, game.gameDate.day) : 
+        const gameDate = game.date ? 
+          new Date(game.date.year, game.date.month - 1, game.date.day) : 
           new Date();
         
         profitItems.push({
           gameId: game.id,
-          gameName: game.name,
+          gameName: game.groupNameSnapshot,
           gameDate,
           profit,
           investment,
@@ -282,14 +282,14 @@ export const calculateExtremeProfit: CalculationFunction<ExtremeProfitParams, Ex
         const roi = totalInvestment > 0 ? (totalProfit / totalInvestment) * 100 : 0;
         
         // יצירת תאריך משחק
-        const gameDate = game.gameDate ? 
-          new Date(game.gameDate.year, game.gameDate.month - 1, game.gameDate.day) : 
+        const gameDate = game.date ? 
+          new Date(game.date.year, game.date.month - 1, game.date.day) : 
           new Date();
         
         if (totalProfit !== 0) { // רק אם יש רווח או הפסד
           profitItems.push({
             gameId: game.id,
-            gameName: game.name,
+            gameName: game.groupNameSnapshot,
             gameDate,
             profit: totalProfit,
             investment: totalInvestment,

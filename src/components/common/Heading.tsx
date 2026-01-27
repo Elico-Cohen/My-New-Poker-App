@@ -23,7 +23,6 @@ export function Heading({
     <Text
       variant={variant}
       {...props}
-      children={children}
     >
       {children}
     </Text>

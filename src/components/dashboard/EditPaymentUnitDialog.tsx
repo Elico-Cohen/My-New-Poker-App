@@ -10,16 +10,20 @@ import { useColorScheme } from '@/components/useColorScheme';
 import { PaymentUnit } from '@/models/PaymentUnit';
 import { getAllActivePaymentUnits, updatePaymentUnit } from '@/services/paymentUnits';
 
+interface EnrichedPlayer {
+  id: string;
+  name: string;
+}
+
+interface EnrichedPaymentUnit extends Omit<PaymentUnit, 'players'> {
+  players: EnrichedPlayer[];
+}
+
 interface EditPaymentUnitDialogProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  unit: PaymentUnit & {
-    players: {
-      id: string;
-      name: string;
-    }[];
-  };
+  unit: EnrichedPaymentUnit;
 }
 
 export function EditPaymentUnitDialog({
@@ -108,7 +112,6 @@ export function EditPaymentUnitDialog({
   return (
     <Dialog
       visible={visible}
-      onClose={onClose}
       title={`עריכת יחידת תשלום - ${unit.name}`}
       message=""
       onConfirm={handleSave}
