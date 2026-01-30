@@ -1,6 +1,6 @@
 // src/app/(tabs)/home2.tsx
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, Dimensions, Image } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, Dimensions, Image, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Text } from '@/components/common/Text';
 import { Card } from '@/components/common/Card';
@@ -437,32 +437,49 @@ export default function HomeScreen() {
   }, []);
 
   // פונקציית התנתקות עם ניווט מובנה
-  const handleLogout = () => {
-    // Confirm before logout
-    Alert.alert(
-      "אישור התנתקות",
-      "האם אתה בטוח שברצונך להתנתק?",
-      [
-        {
-          text: "ביטול",
-          style: "cancel"
-        },
-        {
-          text: "התנתק",
-          onPress: async () => {
-            try {
-              console.log('Logout requested');
-              await logout();
-              console.log('Logout successful, navigating to login screen');
-              router.replace('/login');
-            } catch (error) {
-              console.error('Error during logout:', error);
-              Alert.alert("שגיאה", "אירעה שגיאה במהלך ההתנתקות");
-            }
-          }
+  const handleLogout = async () => {
+    console.log('=== handleLogout called ===');
+
+    // Use window.confirm on web, Alert.alert on native
+    const performLogout = async () => {
+      try {
+        console.log('Logout requested');
+        await logout();
+        console.log('Logout successful, navigating to login screen');
+        router.replace('/login');
+      } catch (error) {
+        console.error('Error during logout:', error);
+        if (Platform.OS === 'web') {
+          window.alert("אירעה שגיאה במהלך ההתנתקות");
+        } else {
+          Alert.alert("שגיאה", "אירעה שגיאה במהלך ההתנתקות");
         }
-      ]
-    );
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // Web: use window.confirm
+      const confirmed = window.confirm("האם אתה בטוח שברצונך להתנתק?");
+      if (confirmed) {
+        await performLogout();
+      }
+    } else {
+      // Native: use Alert.alert
+      Alert.alert(
+        "אישור התנתקות",
+        "האם אתה בטוח שברצונך להתנתק?",
+        [
+          {
+            text: "ביטול",
+            style: "cancel"
+          },
+          {
+            text: "התנתק",
+            onPress: performLogout
+          }
+        ]
+      );
+    }
   };
 
   // Handle settings

@@ -12,7 +12,7 @@
  * - So the security rules know what they're allowed to do
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onUserCreate = exports.onUserRoleChange = void 0;
+exports.migrateExistingUserClaims = exports.onUserCreate = exports.onUserRoleChange = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 // Initialize Firebase Admin
@@ -97,6 +97,100 @@ exports.onUserCreate = functions.firestore
     catch (error) {
         console.error(`Error setting custom claims for new user ${authUid}:`, error);
         throw error;
+    }
+});
+/**
+ * ONE-TIME MIGRATION FUNCTION
+ *
+ * This function sets custom claims for ALL existing users who don't have them.
+ * Run this once after deploying the new Firestore security rules.
+ *
+ * Call via: https://us-central1-mynewpokerapp.cloudfunctions.net/migrateExistingUserClaims
+ *
+ * After running successfully, you can delete this function.
+ */
+exports.migrateExistingUserClaims = functions.https.onRequest(async (req, res) => {
+    // Only allow POST requests for safety
+    if (req.method !== "POST") {
+        res.status(405).send("Method not allowed. Use POST to run migration.");
+        return;
+    }
+    console.log("Starting migration of custom claims for existing users...");
+    const results = {
+        total: 0,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+        details: [],
+    };
+    try {
+        // Get all users from Firestore
+        const usersSnapshot = await admin.firestore().collection("users").get();
+        results.total = usersSnapshot.size;
+        console.log(`Found ${results.total} users to process`);
+        // Process each user
+        for (const userDoc of usersSnapshot.docs) {
+            const userId = userDoc.id;
+            const userData = userDoc.data();
+            const authUid = userData.authUid;
+            const role = userData.role || "regular";
+            // Skip users without authUid
+            if (!authUid) {
+                results.skipped++;
+                results.details.push(`SKIPPED: ${userId} - no authUid`);
+                console.log(`Skipping user ${userId}: no authUid`);
+                continue;
+            }
+            try {
+                // Check if user exists in Firebase Auth
+                const authUser = await admin.auth().getUser(authUid);
+                // Check if claims already exist
+                const existingClaims = authUser.customClaims;
+                if (existingClaims && existingClaims.role === role) {
+                    results.skipped++;
+                    results.details.push(`SKIPPED: ${userId} - already has correct claims (${role})`);
+                    console.log(`Skipping user ${userId}: already has correct claims`);
+                    continue;
+                }
+                // Set the custom claims
+                await admin.auth().setCustomUserClaims(authUid, { role: role });
+                // Update the user document to mark migration
+                await userDoc.ref.update({
+                    claimsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    claimsMigratedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                results.success++;
+                results.details.push(`SUCCESS: ${userId} (${userData.email}) - set role: ${role}`);
+                console.log(`Successfully set claims for user ${userId} (${userData.email}): role=${role}`);
+            }
+            catch (userError) {
+                results.failed++;
+                const errorMsg = userError.message || "Unknown error";
+                results.details.push(`FAILED: ${userId} - ${errorMsg}`);
+                console.error(`Failed to set claims for user ${userId}:`, userError);
+            }
+        }
+        // Log summary
+        console.log("Migration completed!");
+        console.log(`Total: ${results.total}, Success: ${results.success}, Skipped: ${results.skipped}, Failed: ${results.failed}`);
+        // Return results
+        res.status(200).json({
+            message: "Migration completed",
+            summary: {
+                total: results.total,
+                success: results.success,
+                skipped: results.skipped,
+                failed: results.failed,
+            },
+            details: results.details,
+        });
+    }
+    catch (error) {
+        console.error("Migration failed:", error);
+        res.status(500).json({
+            message: "Migration failed",
+            error: error.message,
+        });
     }
 });
 //# sourceMappingURL=index.js.map

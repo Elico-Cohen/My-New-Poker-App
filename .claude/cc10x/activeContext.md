@@ -1,143 +1,83 @@
 # Active Context
 
 ## Current Focus
-Comprehensive implementation plan created for fixing all identified issues in MyNewPokerApp. Plan covers security, role management, data sync, testing, and code quality.
+Comprehensive code review completed identifying ROOT CAUSES of all reported issues. Two critical bugs found causing both reported problems.
 
 ## Recent Changes
+- 2026-01-30: Comprehensive root cause analysis completed for sign out + network error issues
 - 2026-01-22: Created comprehensive fixes implementation plan (docs/plans/2026-01-22-comprehensive-fixes-plan.md)
 - 2026-01-22: Added explicit Android manifest RTL configuration via app.config.js (c53bcb0)
-- Recent: Removed custom RTL plugin (using Expo's built-in solution) (c0e90ec)
-- Recent: Fixed RTL layout and saved icon issues (e7e211c, 54e2222)
-- Recent: Fixed saved icon stuck issue - properly clear status reset timeout (6ac9ea9)
-- Previous: Fixed 4-5 critical stability/crash issues (7fee500, 09f32f6)
-- Previous: Fixed critical memory leak causing crash after 2 hours (65b2aef)
 
 ## Next Steps
-1. Review implementation plan at docs/plans/2026-01-22-comprehensive-fixes-plan.md
-2. Choose execution approach (subagent-driven or manual step-by-step)
-3. Execute Phase 1: Critical Security & Stability
-4. Execute Phase 2: Role Management UI
-5. Execute Phases 3-5 as priority allows
+1. **CRITICAL FIX 1**: Change firebase.json ignore pattern from `**/node_modules/**` to `node_modules/**`
+2. **CRITICAL FIX 2**: Add graceful font fallback in `_layout.tsx` (don't throw on fontsError)
+3. **CRITICAL FIX 3**: Create Cloud Function to set custom claims for all users OR add fallback rules
+4. Deploy fixes and verify both issues are resolved
 
 ## Active Decisions
 
 | Decision | Choice | Why |
 |----------|--------|-----|
-| Implementation Plan Structure | 5 phases: Security → Role Management → Testing → Migration → Documentation | Address critical issues first, build foundation for quality |
-| Security Rules Priority | Implement role-based Firestore rules immediately | Currently permissive rules are blocking production |
-| Conflict Resolution UX | Visual modal showing diff between versions | User reported confusion with basic alert, need clear comparison |
-| Password Change Flow | Restore commented flow with dedicated screen | Security requirement - users need ability to change compromised passwords |
-| Role Management UI | Admin-only dashboard for user role assignment | User's explicit requirement for super-user/regular-user management |
-| Testing Strategy | Start with calculation module, 70% coverage target | No tests currently exist, calculations are most critical |
-| Migration Approach | Test-driven migration with verification tests | Two calculation systems exist, need safe migration path |
-| Configuration | Centralize all constants in src/config/constants.ts | Magic numbers scattered throughout, makes maintenance difficult |
+| Network error root cause | Firebase hosting excludes bundled fonts | `**/node_modules/**` pattern too broad |
+| Sign out root cause | Users lack custom claims for Firestore rules | Rules require `request.auth.token.role` which doesn't exist |
+| Font error handling | Graceful fallback, not throw | Crashing app is worse than using system fonts |
+| Custom claims approach | Cloud Function needed | Only way to set custom claims on Firebase Auth tokens |
 
-## Plan Reference
+## Critical Bug Analysis (2026-01-30)
 
-**Implementation Plan:** `docs/plans/2026-01-22-comprehensive-fixes-plan.md`
+### BUG 1: "A network error occurred" on App Load
 
-**Plan Summary:**
-- **Phase 1 (3-4 days)**: Critical Security & Stability
-  - Task 1.1: Role-based Firestore security rules
-  - Task 1.2: Improve data sync conflict resolution UX
-  - Task 1.3: Restore password change flow
+**Root Cause Chain:**
+1. `firebase.json` line 7: `**/node_modules/**` excludes bundled fonts
+2. Expo bundles fonts to `dist/assets/node_modules/@expo-google-fonts/`
+3. Fonts not deployed to Firebase Hosting (404 errors)
+4. `_layout.tsx` line 136: `throw fontsError` crashes app
+5. ErrorBoundary shows "Something went wrong. Error: A network error occurred"
 
-- **Phase 2 (2-3 days)**: Role Management UI
-  - Task 2.1: Create user management dashboard with role assignment
+**Files Affected:**
+- `firebase.json:7` - Wrong ignore pattern
+- `src/app/_layout.tsx:136` - Throws instead of graceful fallback
 
-- **Phase 3 (4-5 days)**: Testing Infrastructure
-  - Task 3.1: Set up Jest testing framework
-  - Task 3.2: Add integration tests for game flow
+### BUG 2: Sign Out Button Not Responding
 
-- **Phase 4 (3-4 days)**: Code Migration & Cleanup
-  - Task 4.1: Complete calculation module migration
-  - Task 4.2: Remove debug code and extract configuration
+**Root Cause Chain:**
+1. `firestore.rules` lines 16-33: Rules require `request.auth.token.role`
+2. Existing users don't have custom claims set
+3. `getUserRole()` returns `undefined`
+4. All permission checks (`isAdmin()`, `isSuper()`) fail
+5. Firestore operations during logout fail with "Missing or insufficient permissions"
+6. `AuthContext.tsx` logout waits for game saves/cleanup that never complete
 
-- **Phase 5 (2-3 days)**: Polish & Documentation
-  - Task 5.1: Improve error messages and add comprehensive docs
-
-**Total Estimated Time:** 14-19 days
-
-**Confidence Score:** 8/10 for one-pass success
-
-## Project Overview
-
-**App Name:** MyNewPokerApp
-**Platform:** React Native (Expo) with TypeScript
-**Purpose:** Hebrew-language poker game management system with real-time sync, statistics tracking, and multi-user support
-**Language:** Hebrew (RTL layout enabled)
-**Database:** Firebase Firestore
-**Authentication:** Firebase Auth
-
-## Critical Issues Addressed
-
-### User-Reported Issues
-1. **Data Sync Conflicts** - App crash during game causes conflict, basic alert is confusing
-   - Solution: Visual modal showing diff, clear comparison of local vs remote
-   - File: src/components/ConflictResolutionModal.tsx (new)
-
-2. **Role Management** - Need to assign super-users and regular users
-   - Solution: Admin dashboard for role assignment with validation
-   - File: src/app/dashboard/users.tsx (new)
-
-### Security Issues (CRITICAL)
-1. **Firestore Rules** - Currently permissive for all authenticated users
-   - Solution: Role-based rules (admin/super/regular) with ownership checks
-   - File: firestore.rules:1-38
-
-2. **Password Change** - Flow commented out and disabled
-   - Solution: Dedicated change-password screen with validation
-   - File: src/app/change-password.tsx (new)
-
-### Code Quality Issues
-1. **No Test Coverage** - Zero unit/integration tests
-   - Solution: Jest setup with 70% coverage target
-   - Files: jest.config.js, src/calculations/__tests__/
-
-2. **Incomplete Migration** - Old and new calculation code coexist
-   - Solution: Test-driven migration with verification
-   - Files: Multiple services updated to use new calculation module
-
-3. **Debug Code** - console.log statements in production
-   - Solution: Remove or wrap in __DEV__, create logging utility
-   - File: src/utils/logger.ts (new)
-
-4. **Magic Numbers** - Hardcoded configuration values
-   - Solution: Centralized constants file
-   - File: src/config/constants.ts (new)
+**Files Affected:**
+- `firestore.rules:16-33` - Rules require non-existent claims
+- `src/contexts/AuthContext.tsx:444-489` - Logout hangs on failed Firestore ops
 
 ## Learnings This Session
 
-### Plan Design Patterns Applied
-1. **Bite-sized tasks** - Each step is 2-5 minutes, specific action
-2. **Context references** - All code changes reference file:line from existing codebase
-3. **Risk assessment** - Probability × Impact scoring for each risk
-4. **Success criteria** - Explicit checkboxes for each phase
-5. **Confidence score** - 8/10 with clear factors listed
+### Root Cause Analysis Insights
+1. Network error was NOT a network issue - it was a deployment/config issue
+2. Sign out issue was NOT a button issue - it was a backend permissions issue
+3. Both bugs were introduced together when Firestore rules were updated to use custom claims
+4. The fixes in FIXES_TO_REAPPLY.md were identified correctly but not yet applied
 
-### User Requirements Analysis
-- User reported past crash causing sync conflict with confusing UI
-- User wants role management (admin assigns super-users and regular users)
-- Current app has temporary permissive security rules with TODOs
-- Password change flow was intentionally disabled during development
-
-### Architecture Insights
-- AppStore + SyncService pattern provides centralized data management
-- GameContext handles auto-save with debouncing (500ms existing, 1000ms new games)
-- Network sync has 5-second cooldown to prevent spam
-- Role-based permissions exist in AuthContext but not enforced in Firestore
+### Key Files for Future Reference
+- Firebase config: `firebase.json`
+- Font loading: `src/app/_layout.tsx`
+- Auth flow: `src/contexts/AuthContext.tsx`
+- Firestore rules: `firestore.rules`
+- Fix documentation: `.claude/cc10x/FIXES_TO_REAPPLY.md`
 
 ## Blockers / Issues
 
-**NONE** - Plan is ready for execution. Waiting for user to choose execution approach.
+**TWO CRITICAL FIXES REQUIRED BEFORE APP IS USABLE:**
+1. firebase.json ignore pattern fix (blocks web deployment)
+2. Custom claims for Firestore rules (blocks all authenticated operations)
 
 ## User Preferences Discovered
 - Hebrew-first application (RTL layout required)
 - Focus on real-time sync and offline capability
 - Multi-user poker game management with statistics tracking
 - Role-based permissions (admin, super user, regular)
-- Clear visual feedback for data conflicts (not just basic alerts)
-- Admin-only ability to assign roles to users
 
 ## Last Updated
-2026-01-22 - Comprehensive implementation plan created and saved
+2026-01-30 - Comprehensive root cause analysis completed

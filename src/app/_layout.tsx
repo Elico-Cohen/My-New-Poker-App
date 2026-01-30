@@ -173,31 +173,31 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
   const { isAuthenticated, isLoading } = useAuth();
-  
+
   // לוג פשוט מאוד, ללא ניווטים אוטומטיים - זה בעייתי
   console.log('RootLayoutNav rendered', { isAuthenticated, isLoading });
-  
+
   return (
     <>
       <Stack>
         {/* מסך אינדקס - יגיע למסך הלוגין באמצעות Redirect */}
-        <Stack.Screen 
-          name="index" 
-          options={{ 
+        <Stack.Screen
+          name="index"
+          options={{
             headerShown: false,
             animation: 'none'
           }}
         />
-        
+
         {/* מסך לוגין */}
-        <Stack.Screen 
-          name="login" 
-          options={{ 
+        <Stack.Screen
+          name="login"
+          options={{
             headerShown: false,
             animation: 'none'
           }}
         />
-        
+
         {/* מסך רישום */}
         <Stack.Screen
           name="register"
@@ -217,47 +217,47 @@ function RootLayoutNav() {
             animation: 'slide_from_right'
           }}
         />
-        
+
         {/* מסך דשבורד */}
-        <Stack.Screen 
-          name="dashboard" 
-          options={{ 
+        <Stack.Screen
+          name="dashboard"
+          options={{
             headerShown: false,
             animation: 'fade'
           }}
         />
-        
+
         {/* מסכי טאבים */}
-        <Stack.Screen 
-          name="(tabs)" 
-          options={{ 
+        <Stack.Screen
+          name="(tabs)"
+          options={{
             headerShown: false,
             animation: 'fade'
           }}
         />
-        
+
         {/* מסכי היסטוריה */}
-        <Stack.Screen 
-          name="history" 
-          options={{ 
+        <Stack.Screen
+          name="history"
+          options={{
             headerShown: false,
             animation: 'slide_from_right'
           }}
         />
-        
+
         {/* מסכי סטטיסטיקות */}
-        <Stack.Screen 
-          name="statistics" 
-          options={{ 
+        <Stack.Screen
+          name="statistics"
+          options={{
             headerShown: false,
             animation: 'slide_from_right'
           }}
         />
 
         {/* מסכי גיים פלו */}
-        <Stack.Screen 
-          name="gameFlow" 
-          options={{ 
+        <Stack.Screen
+          name="gameFlow"
+          options={{
             headerShown: false,
             animation: 'slide_from_right'
           }}
