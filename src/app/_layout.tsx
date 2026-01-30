@@ -131,23 +131,29 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
+  // Handle font loading errors gracefully - don't crash the app
   // @ts-ignore - מתעלמים מסוג ה-useEffect
   React.useEffect(() => {
-    if (fontsError) throw fontsError;
+    if (fontsError) {
+      console.warn('Font loading failed, using system fonts as fallback:', fontsError);
+      // Don't throw - continue with system fonts
+    }
   }, [fontsError]);
 
   // @ts-ignore - מתעלמים מסוג ה-useEffect
   React.useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded || fontsError) {
+      // Hide splash screen when fonts loaded OR if there was an error (fallback to system fonts)
       SplashScreen.hideAsync();
-      // Run data migration after fonts are loaded and splash screen is hidden
+      // Run data migration after splash screen is hidden
       migrateGameDates()
         .then(() => console.log('Migration check completed'))
         .catch(error => console.error('Migration check failed:', error));
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontsError]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontsError) {
+    // Only show loading state if fonts are still loading (no error yet)
     return null;
   }
 
