@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MyNewPokerApp",
+    "name": "Crazy Poker",
     "slug": "MyNewPokerApp",
     "version": "1.0.0",
     "owner": "elico-cohen",
@@ -12,7 +12,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0D1B1E"
     },
     "ios": {
       "bundleIdentifier": "com.elicohen.mynewpokerapp",
@@ -22,13 +22,18 @@
       "package": "com.elicohen.mynewpokerapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0D1B1E"
       }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./public/favicon.png",
+      "name": "Crazy Poker",
+      "shortName": "Crazy Poker",
+      "description": "Poker game management app",
+      "themeColor": "#35654d",
+      "backgroundColor": "#0D1B1E"
     },
     "plugins": [
       "expo-router",

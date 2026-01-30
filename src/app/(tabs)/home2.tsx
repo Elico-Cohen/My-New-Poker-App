@@ -25,6 +25,7 @@ import { syncService } from '@/store/SyncService';
 import { GroupStats } from '@/models/Statistics';
 import HeaderBar from '@/components/navigation/HeaderBar';
 import ActiveGameBanner from '@/components/common/ActiveGameBanner';
+import ConfirmationModal from '@/components/common/ConfirmationModal';
 
 // הגדרת צבעי המערכת
 const CASINO_COLORS = {
@@ -79,6 +80,7 @@ export default function HomeScreen() {
 
   const [localGamesCount, setLocalGamesCount] = useState(0);
   const [showLocalGamesAlert, setShowLocalGamesAlert] = useState(false);
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false);
 
   // Function to fetch user profile by email
   const fetchUserProfileByEmail = async (email: string | null | undefined) => {
@@ -437,48 +439,23 @@ export default function HomeScreen() {
   }, []);
 
   // פונקציית התנתקות עם ניווט מובנה
-  const handleLogout = async () => {
+  // Show logout confirmation modal
+  const handleLogout = () => {
     console.log('=== handleLogout called ===');
+    setShowLogoutConfirmation(true);
+  };
 
-    // Use window.confirm on web, Alert.alert on native
-    const performLogout = async () => {
-      try {
-        console.log('Logout requested');
-        await logout();
-        console.log('Logout successful, navigating to login screen');
-        router.replace('/login');
-      } catch (error) {
-        console.error('Error during logout:', error);
-        if (Platform.OS === 'web') {
-          window.alert("אירעה שגיאה במהלך ההתנתקות");
-        } else {
-          Alert.alert("שגיאה", "אירעה שגיאה במהלך ההתנתקות");
-        }
-      }
-    };
-
-    if (Platform.OS === 'web') {
-      // Web: use window.confirm
-      const confirmed = window.confirm("האם אתה בטוח שברצונך להתנתק?");
-      if (confirmed) {
-        await performLogout();
-      }
-    } else {
-      // Native: use Alert.alert
-      Alert.alert(
-        "אישור התנתקות",
-        "האם אתה בטוח שברצונך להתנתק?",
-        [
-          {
-            text: "ביטול",
-            style: "cancel"
-          },
-          {
-            text: "התנתק",
-            onPress: performLogout
-          }
-        ]
-      );
+  // Perform the actual logout
+  const performLogout = async () => {
+    setShowLogoutConfirmation(false);
+    try {
+      console.log('Logout requested');
+      await logout();
+      console.log('Logout successful, navigating to login screen');
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      Alert.alert("שגיאה", "אירעה שגיאה במהלך ההתנתקות");
     }
   };
 
@@ -657,6 +634,19 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmationModal
+        visible={showLogoutConfirmation}
+        title="אישור התנתקות"
+        message="האם אתה בטוח שברצונך להתנתק?"
+        confirmText="התנתק"
+        cancelText="ביטול"
+        onConfirm={performLogout}
+        onCancel={() => setShowLogoutConfirmation(false)}
+        confirmButtonColor="#ff4444"
+        cancelButtonColor="#35654d"
+      />
     </View>
   );
 }
