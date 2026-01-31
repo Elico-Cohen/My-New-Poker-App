@@ -1,0 +1,28 @@
+{
+  "name": "Poker Night - ניהול ערבי פוקר",
+  "short_name": "Poker",
+  "description": "ניהול ערבי פוקר וסטטיסטיקות",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D1B1E",
+  "theme_color": "#35654d",
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/images/adaptive-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["games", "utilities"],
+  "prefer_related_applications": false
+}

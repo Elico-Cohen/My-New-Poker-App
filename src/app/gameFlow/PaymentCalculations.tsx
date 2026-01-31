@@ -58,6 +58,16 @@ export default function PaymentCalculations() {
     message: string;
   }>>([]);
   const [showMessageDialog, setShowMessageDialog] = useState(false);
+  const [alertDialog, setAlertDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    showCancel?: boolean;
+  } | null>(null);
   const { canManageEntity } = useAuth();
 
   // בדיקת הרשאות להמשך המשחק
@@ -480,10 +490,14 @@ export default function PaymentCalculations() {
     const invalidRecipients = recipients.filter(r => !r.recipientPhone);
 
     if (validRecipients.length === 0) {
-      Alert.alert(
-        'אין מספרי טלפון',
-        'לא נמצאו מספרי טלפון לשחקנים. יש לוודא שהמספרים מוגדרים במערכת.'
-      );
+      setAlertDialog({
+        visible: true,
+        title: 'אין מספרי טלפון',
+        message: 'לא נמצאו מספרי טלפון לשחקנים. יש לוודא שהמספרים מוגדרים במערכת.',
+        confirmText: 'אישור',
+        showCancel: false,
+        onConfirm: () => setAlertDialog(null)
+      });
       return;
     }
 
@@ -499,14 +513,19 @@ export default function PaymentCalculations() {
     // Warn about missing phone numbers
     if (invalidRecipients.length > 0) {
       const missingNames = invalidRecipients.map(r => r.recipientName).join(', ');
-      Alert.alert(
-        'שים לב',
-        `לא נמצאו מספרי טלפון עבור: ${missingNames}\nיישלחו ${messages.length} הודעות.`,
-        [
-          { text: 'ביטול', style: 'cancel' },
-          { text: 'המשך', onPress: () => startSendingMessages(messages) }
-        ]
-      );
+      setAlertDialog({
+        visible: true,
+        title: 'שים לב',
+        message: `לא נמצאו מספרי טלפון עבור: ${missingNames}\nיישלחו ${messages.length} הודעות.`,
+        confirmText: 'המשך',
+        cancelText: 'ביטול',
+        showCancel: true,
+        onConfirm: () => {
+          setAlertDialog(null);
+          startSendingMessages(messages);
+        },
+        onCancel: () => setAlertDialog(null)
+      });
     } else {
       startSendingMessages(messages);
     }
@@ -525,7 +544,14 @@ export default function PaymentCalculations() {
     if (pendingMessages.length === 0) {
       setSendingMessages(false);
       setShowMessageDialog(false);
-      Alert.alert('הושלם!', 'כל ההודעות נשלחו בהצלחה.');
+      setAlertDialog({
+        visible: true,
+        title: 'הושלם!',
+        message: 'כל ההודעות נשלחו בהצלחה.',
+        confirmText: 'אישור',
+        showCancel: false,
+        onConfirm: () => setAlertDialog(null)
+      });
       return;
     }
 
@@ -537,17 +563,23 @@ export default function PaymentCalculations() {
       setPendingMessages(remaining);
       setMessageProgress(prev => ({ ...prev, current: prev.current + 1 }));
     } else {
-      Alert.alert(
-        'שגיאה',
-        `לא ניתן לשלוח הודעה ל${nextMessage.recipientName}`,
-        [
-          { text: 'דלג', onPress: () => {
-            setPendingMessages(remaining);
-            setMessageProgress(prev => ({ ...prev, current: prev.current + 1 }));
-          }},
-          { text: 'נסה שוב', onPress: sendNextMessage }
-        ]
-      );
+      setAlertDialog({
+        visible: true,
+        title: 'שגיאה',
+        message: `לא ניתן לשלוח הודעה ל${nextMessage.recipientName}`,
+        confirmText: 'נסה שוב',
+        cancelText: 'דלג',
+        showCancel: true,
+        onConfirm: () => {
+          setAlertDialog(null);
+          sendNextMessage();
+        },
+        onCancel: () => {
+          setAlertDialog(null);
+          setPendingMessages(remaining);
+          setMessageProgress(prev => ({ ...prev, current: prev.current + 1 }));
+        }
+      });
     }
   };
 
@@ -702,6 +734,19 @@ export default function PaymentCalculations() {
         confirmText="כן, חזור"
         cancelText="לא, המשך כאן"
       />
+
+      {/* Alert Dialog - replaces Alert.alert for web compatibility */}
+      {alertDialog && (
+        <Dialog
+          visible={alertDialog.visible}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          onConfirm={alertDialog.onConfirm || (() => setAlertDialog(null))}
+          onCancel={alertDialog.showCancel ? (alertDialog.onCancel || (() => setAlertDialog(null))) : undefined}
+          confirmText={alertDialog.confirmText || 'אישור'}
+          cancelText={alertDialog.cancelText || 'ביטול'}
+        />
+      )}
     </View>
   );
 }

@@ -13,6 +13,7 @@ import { doc, getDoc, serverTimestamp, updateDoc, setDoc, query, collection, whe
 import { db, auth } from '@/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncService } from '@/store/SyncService';
+import { router } from 'expo-router';
 
 // Constants
 const SESSION_DURATION = 1000 * 60 * 60 * 24; // 24 hours in milliseconds
@@ -476,8 +477,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // כעת נתנתק מהשרת
       console.log('AuthContext: signing out from Firebase');
       await signOut(auth);
-      
+
       console.log('AuthContext: logout successful, all local data cleared');
+
+      // Clear navigation stack and go to login
+      // This prevents Android back button from returning to protected screens
+      console.log('AuthContext: clearing navigation stack');
+      while (router.canGoBack()) {
+        router.back();
+      }
+      router.replace('/login');
     } catch (err) {
       console.error('AuthContext: logout error:', err);
       // גם אם יש שגיאה, ננקה את הנתונים המקומיים
