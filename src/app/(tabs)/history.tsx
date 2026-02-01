@@ -61,6 +61,10 @@ export default function HistoryScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [playerSuggestions, setPlayerSuggestions] = useState<string[]>([]);
+
   // Format date for display with safety checks
   const formatDate = (gameDate: any): string => {
     try {
@@ -380,8 +384,67 @@ export default function HistoryScreen() {
   // Apply filters when they change
   useEffect(() => {
     // Call the filtering function whenever filters or the base list change
-    applyFiltersAndSetState(allGames); 
+    applyFiltersAndSetState(allGames);
   }, [allGames, selectedGroup, selectedPeriod, searchQuery]); // Dependencies include allGames and filters
+
+  // Get unique player names based on selected group filter
+  const getFilteredPlayerNames = useCallback((): string[] => {
+    let gamesToSearch = allGames;
+
+    // Filter by group if a specific group is selected
+    if (selectedGroup !== 'all') {
+      gamesToSearch = allGames.filter(game => game.groupId === selectedGroup);
+    }
+
+    // Extract unique player names
+    const playerNamesSet = new Set<string>();
+    gamesToSearch.forEach(game => {
+      if (game.players && Array.isArray(game.players)) {
+        game.players.forEach(player => {
+          if (player.name) {
+            playerNamesSet.add(player.name);
+          }
+        });
+      }
+    });
+
+    return Array.from(playerNamesSet).sort((a, b) => a.localeCompare(b, 'he'));
+  }, [allGames, selectedGroup]);
+
+  // Update suggestions when search query changes
+  useEffect(() => {
+    if (searchQuery.trim().length > 0) {
+      const allPlayerNames = getFilteredPlayerNames();
+      const query = searchQuery.toLowerCase();
+
+      // Check if the query is an exact match to a player name (user selected from suggestions)
+      const isExactMatch = allPlayerNames.some(name =>
+        name.toLowerCase() === query
+      );
+
+      if (isExactMatch) {
+        // Don't show suggestions if user already selected a player
+        setPlayerSuggestions([]);
+        setShowSuggestions(false);
+      } else {
+        // Show matching suggestions
+        const matches = allPlayerNames.filter(name =>
+          name.toLowerCase().includes(query)
+        );
+        setPlayerSuggestions(matches);
+        setShowSuggestions(matches.length > 0);
+      }
+    } else {
+      setPlayerSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [searchQuery, getFilteredPlayerNames]);
+
+  // Handle suggestion selection
+  const handleSelectSuggestion = (playerName: string) => {
+    setSearchQuery(playerName);
+    setShowSuggestions(false);
+  };
   
   // Calculate game result data
   const calculateGameStats = (game: Game) => {
@@ -485,14 +548,50 @@ export default function HistoryScreen() {
         <View style={styles.searchContainer}>
           <Input
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (text.trim().length === 0) {
+                setShowSuggestions(false);
+              }
+            }}
+            onFocus={() => {
+              if (searchQuery.trim().length > 0 && playerSuggestions.length > 0) {
+                setShowSuggestions(true);
+              }
+            }}
             placeholder="חיפוש לפי שם שחקן..."
-            style={styles.searchInput}
+            style={styles.searchInputWrapper}
+            inputStyle={styles.searchInputText}
             clearable={true}
-            onClear={() => setSearchQuery('')}
+            onClear={() => {
+              setSearchQuery('');
+              setShowSuggestions(false);
+            }}
           />
         </View>
       </View>
+
+      {/* Autocomplete suggestions dropdown - positioned outside filters for better z-index on mobile */}
+      {showSuggestions && playerSuggestions.length > 0 && (
+        <View style={styles.suggestionsContainer}>
+          <ScrollView
+            style={styles.suggestionsList}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+          >
+            {playerSuggestions.map((playerName, index) => (
+              <TouchableOpacity
+                key={`${playerName}-${index}`}
+                style={styles.suggestionItem}
+                onPress={() => handleSelectSuggestion(playerName)}
+              >
+                <Icon name="account" size="small" color={CASINO_COLORS.gold} />
+                <Text style={styles.suggestionText}>{playerName}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Display Filtered Games Count */}
       <View style={styles.countContainer}>
@@ -502,7 +601,10 @@ export default function HistoryScreen() {
       </View>
 
       {/* Games List */}
-      <ScrollView style={styles.scrollView}>
+      <ScrollView
+        style={styles.scrollView}
+        onScrollBeginDrag={() => setShowSuggestions(false)}
+      >
         {loading && filteredGames.length > 0 && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color={CASINO_COLORS.gold} />
@@ -674,10 +776,47 @@ const styles = StyleSheet.create({
   searchContainer: {
     marginTop: 8,
   },
-  searchInput: {
+  searchInputWrapper: {
+    // No border here - handled by inputStyle
+  },
+  searchInputText: {
     backgroundColor: CASINO_COLORS.background,
+    color: '#FFFFFF',
+    minHeight: 48,
+    fontSize: 16,
+    borderWidth: 1,
     borderColor: CASINO_COLORS.gold,
+    borderRadius: 8,
+  },
+  suggestionsContainer: {
+    marginHorizontal: 16,
+    backgroundColor: CASINO_COLORS.surface,
+    borderWidth: 1,
+    borderColor: CASINO_COLORS.gold,
+    borderRadius: 8,
+    maxHeight: 200,
+    zIndex: 100,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
+  suggestionsList: {
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
+    gap: 12,
+  },
+  suggestionText: {
     color: CASINO_COLORS.text,
+    fontSize: 16,
   },
   scrollView: {
     flex: 1,

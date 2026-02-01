@@ -21,6 +21,8 @@ export interface InputProps {
   onClear?: () => void;
   label?: string;
   error?: string | null;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export function Input({
@@ -37,6 +39,8 @@ export function Input({
   onClear,
   label,
   error,
+  onFocus,
+  onBlur,
 }: InputProps) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? 'light'];
@@ -68,8 +72,11 @@ export function Input({
           secureTextEntry={secureTextEntry}
           autoCapitalize={autoCapitalize}
           editable={editable}
+          onFocus={onFocus}
+          onBlur={onBlur}
           style={[
             baseInputStyle,
+            styles.input,
             inputStyle,
           ]}
         />
@@ -109,7 +116,8 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   input: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    minHeight: 48,
   },
   clearButton: {
     position: 'absolute',
