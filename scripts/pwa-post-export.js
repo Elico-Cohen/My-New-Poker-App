@@ -25,9 +25,9 @@ const PWA_META_TAGS = `
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Poker Night">
+    <meta name="apple-mobile-web-app-title" content="Crazy Poker">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/assets/images/icon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 `;
 
 function copyManifest() {
@@ -58,6 +58,26 @@ function copyIcons() {
     if (fs.existsSync(src)) {
       fs.copyFileSync(src, dest);
       console.log(`Copied: assets/images/${icon} -> dist/assets/images/${icon}`);
+    } else {
+      console.warn(`WARNING: ${icon} not found at ${src}`);
+    }
+  }
+
+  // Copy PWA icons from public/ to dist/
+  const pwaIcons = [
+    'icon-72x72.png', 'icon-96x96.png', 'icon-128x128.png', 'icon-144x144.png',
+    'icon-152x152.png', 'icon-192x192.png', 'icon-384x384.png', 'icon-512x512.png',
+    'apple-touch-icon.png', 'apple-touch-icon-120x120.png', 'apple-touch-icon-152x152.png',
+    'apple-touch-icon-167x167.png', 'apple-touch-icon-180x180.png', 'favicon.png'
+  ];
+
+  for (const icon of pwaIcons) {
+    const src = path.join(PUBLIC_DIR, icon);
+    const dest = path.join(DIST_DIR, icon);
+
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dest);
+      console.log(`Copied: public/${icon} -> dist/${icon}`);
     } else {
       console.warn(`WARNING: ${icon} not found at ${src}`);
     }

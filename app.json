@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MyNewPokerApp",
+    "name": "Crazy Poker",
     "slug": "MyNewPokerApp",
     "version": "1.0.0",
     "owner": "elico-cohen",
@@ -28,10 +28,10 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png",
-      "name": "Poker Night",
-      "shortName": "Poker",
-      "description": "ניהול ערבי פוקר וסטטיסטיקות",
+      "favicon": "./public/favicon.png",
+      "name": "Crazy Poker",
+      "shortName": "Crazy Poker",
+      "description": "Poker game management app",
       "lang": "he",
       "dir": "rtl",
       "orientation": "portrait",
