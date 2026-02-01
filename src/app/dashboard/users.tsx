@@ -330,15 +330,15 @@ export default function UsersScreen() {
         >
           {/* תצוגה מצומצמת */}
           <View style={{
-            flexDirection: 'row-reverse',
+            flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ color: CASINO_COLORS.gold, fontSize: 18 }}>{user.name}</Text>
               {/* Role Badge */}
               <View style={{
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 backgroundColor: user.role === 'admin' ? 'rgba(255, 215, 0, 0.2)'
                              : user.role === 'super' ? 'rgba(53, 101, 77, 0.3)'
@@ -360,7 +360,7 @@ export default function UsersScreen() {
                 />
                 <Text style={{
                   fontSize: 12,
-                  marginRight: 4,
+                  marginEnd: 4,
                   color: user.role === 'admin' ? CASINO_COLORS.gold
                        : user.role === 'super' ? CASINO_COLORS.primary
                        : '#888'
@@ -423,7 +423,7 @@ export default function UsersScreen() {
                   <View style={{ gap: 8 }}>
                     {user.groups.map(group => (
                       <View key={group.groupId} style={{
-                        flexDirection: 'row-reverse',
+                        flexDirection: 'row',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -553,7 +553,7 @@ export default function UsersScreen() {
     <View style={{ flex: 1, backgroundColor: CASINO_COLORS.background }}>
       {/* כותרת עם חץ המנווט למסך הראשי */}
       <View style={{ 
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
         backgroundColor: CASINO_COLORS.primary,
@@ -586,7 +586,7 @@ export default function UsersScreen() {
 
       {/* סרגל "משתמש חדש" + חיפוש */}
       <View style={{
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
         padding: 16
@@ -606,7 +606,7 @@ export default function UsersScreen() {
         />
         <View style={{
           flex: 1,
-          flexDirection: 'row-reverse',
+          flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: 'rgba(255, 215, 0, 0.1)',
           borderRadius: 8,

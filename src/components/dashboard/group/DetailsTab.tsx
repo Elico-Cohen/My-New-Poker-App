@@ -85,7 +85,7 @@ function DetailsTab({
 
         {/* שם הקבוצה */}
         <View style={{ 
-          flexDirection: 'row-reverse', 
+          flexDirection: 'row', 
           alignItems: 'center',
           gap: 12 
         }}>
@@ -113,7 +113,7 @@ function DetailsTab({
                 color: '#2c3e50',
                 fontSize: 16,
                 textAlign: 'right',
-                paddingRight: 12
+                paddingEnd: 12
               }}
             />
           </View>
@@ -132,7 +132,7 @@ function DetailsTab({
               Buy-in
             </Text>
             <View style={{ gap: 12 }}>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
                   color: CASINO_COLORS.gold,
                   width: 120,
@@ -157,12 +157,12 @@ function DetailsTab({
                       color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
-                      paddingRight: 12
+                      paddingEnd: 12
                     }}
                   />
                 </View>
               </View>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
                   color: CASINO_COLORS.gold,
                   width: 120,
@@ -187,7 +187,7 @@ function DetailsTab({
                       color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
-                      paddingRight: 12
+                      paddingEnd: 12
                     }}
                   />
                 </View>
@@ -206,7 +206,7 @@ function DetailsTab({
               Rebuy
             </Text>
             <View style={{ gap: 12 }}>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
                   color: CASINO_COLORS.gold,
                   width: 120,
@@ -231,12 +231,12 @@ function DetailsTab({
                       color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
-                      paddingRight: 12
+                      paddingEnd: 12
                     }}
                   />
                 </View>
               </View>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Text style={{ 
                   color: CASINO_COLORS.gold,
                   width: 120,
@@ -261,7 +261,7 @@ function DetailsTab({
                       color: '#2c3e50',
                       fontSize: 16,
                       textAlign: 'left',
-                      paddingRight: 12
+                      paddingEnd: 12
                     }}
                   />
                 </View>
@@ -280,7 +280,7 @@ function DetailsTab({
               חוק האחוזים
             </Text>
             <View style={{ 
-              flexDirection: 'row-reverse',
+              flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
             }}>
@@ -289,7 +289,7 @@ function DetailsTab({
                 onValueChange={setUseRoundingRule}
               />
               <View style={{ 
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 gap: 8,
                 opacity: useRoundingRule ? 1 : 0.5

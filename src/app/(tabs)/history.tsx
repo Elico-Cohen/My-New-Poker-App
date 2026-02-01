@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     borderBottomColor: CASINO_COLORS.gold,
   },
   filterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     color: CASINO_COLORS.gold,
     width: 80,
     textAlign: 'right',
-    marginLeft: 12,
+    marginStart: 12,
   },
   filterControl: {
     flex: 1,
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     borderColor: CASINO_COLORS.gold,
   },
   gameCardHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
     borderBottomWidth: 1,
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   gameDetail: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },

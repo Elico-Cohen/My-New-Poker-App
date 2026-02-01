@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.background,
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: CASINO_COLORS.primary,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     borderBottomColor: CASINO_COLORS.gold,
   },
   filterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     justifyContent: 'space-between',
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     color: CASINO_COLORS.textSecondary,
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 10,
+    marginStart: 10,
     textAlign: 'right',
   },
   filterControl: {
@@ -461,22 +461,22 @@ const styles = StyleSheet.create({
     borderColor: CASINO_COLORS.gold,
   },
   titleContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
   titleWithIcon: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   titleIcon: {
-    marginLeft: 8,
+    marginStart: 8,
   },
   cardTitle: {
     color: CASINO_COLORS.gold,
     fontSize: 18,
     fontWeight: 'bold',
-    marginRight: 10,
+    marginEnd: 10,
     textAlign: 'right',
   },
   loadingContainer: {

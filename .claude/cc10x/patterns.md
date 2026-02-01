@@ -92,10 +92,11 @@ src/services/__tests__/
 - **Solution**: Use ref to track timeout, clear in all cleanup paths
 - **Location**: GameContext.tsx statusResetTimeoutRef
 
-### 4. RTL Layout Issues
-- **Issue**: Hebrew text and icons not aligned properly
+### 4. RTL Layout Issues (Android ONLY)
+- **Issue**: Hebrew text and icons not aligned properly on Android
 - **Solution**: Use Expo's built-in expo-localization + Android manifest configuration
 - **Location**: app.config.js lines 4-14
+- **CRITICAL**: This does NOT work on web! See gotcha #7.
 
 ### 5. Session Expiration During Active Game
 - **Issue**: 24-hour session timeout can log out users mid-game
@@ -106,6 +107,49 @@ src/services/__tests__/
 - **Issue**: Network listeners can trigger excessive sync attempts
 - **Solution**: 5-second cooldown using ref to avoid state updates
 - **Location**: GameContext.tsx lastNetworkSyncTimeRef, lines 250-327
+
+### 7. RTL NOT WORKING on Web (CRITICAL - FULLY UNDERSTOOD)
+- **Issue**: RTL layout not working on web despite `dir="rtl"` on root View
+- **Root Causes (TWO):**
+  1. **Manual RTL Workaround (153 occurrences):** `flexDirection: 'row-reverse'` used as workaround causes DOUBLE reversal with `direction: rtl`
+  2. **Physical CSS Properties (134 occurrences):** `marginLeft/Right`, `paddingLeft/Right` don't flip in RTL
+- **Why Android Works But Web Doesn't:**
+  - Android: I18nManager.forceRTL() works natively
+  - Web: I18nManager is NO-OP, `row-reverse` + `direction: rtl` = double reversal
+- **FlexDirection + Direction Behavior:**
+  ```
+  LTR + row         = left-to-right
+  LTR + row-reverse = right-to-left (manual RTL)
+  RTL + row         = right-to-left (CORRECT)
+  RTL + row-reverse = left-to-right (WRONG - double reversal!)
+  ```
+- **Solution:**
+  1. Replace all `flexDirection: 'row-reverse'` with `'row'`
+  2. Replace physical properties with logical: `marginLeft` -> `marginStart`, etc.
+- **Implementation Plan**: docs/plans/2026-02-01-rtl-web-fix-plan.md
+- **Research**: docs/research/2026-02-01-rtl-web-solution.md
+
+### 8. RTL CSS Property Rules (USE ALWAYS)
+- **NEVER use physical properties** for horizontal spacing/positioning
+- **ALWAYS use logical properties:**
+  ```typescript
+  // WRONG (won't flip in RTL)
+  marginLeft: 10     paddingRight: 15
+  left: 20           right: 20
+
+  // CORRECT (auto-flips in RTL)
+  marginStart: 10    paddingEnd: 15
+  start: 20          end: 20
+  ```
+- **Property Mapping:**
+  | Physical | Logical |
+  |----------|---------|
+  | marginLeft | marginStart |
+  | marginRight | marginEnd |
+  | paddingLeft | paddingStart |
+  | paddingRight | paddingEnd |
+  | left | start |
+  | right | end |
 
 ## API Patterns
 
@@ -260,6 +304,7 @@ canManageGame(gameData): boolean
 - Expo plugin: expo-localization
 - Android manifest: supportsRtl="true" via app.config.js
 - App config: supportsRTL + forcesRTL flags
+- **Web:** Must use `dir="rtl"` on root View + logical CSS properties
 
 ### Version Management
 - Current: 1.0.0

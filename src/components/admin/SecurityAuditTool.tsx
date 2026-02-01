@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     borderColor: CASINO_COLORS.gold,
   },
   issueTitleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },

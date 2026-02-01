@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navButton: {
-    marginLeft: 10,
+    marginStart: 10,
   },
   scrollContainer: {
     flex: 1,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   filterLabel: {
     color: CASINO_COLORS.text,
     fontSize: 16,
-    marginLeft: 10,
+    marginStart: 10,
     width: 60,
     textAlign: 'left',
   },

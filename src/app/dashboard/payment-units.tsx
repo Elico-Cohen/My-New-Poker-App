@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.primary,
     borderBottomWidth: 2,
     borderBottomColor: CASINO_COLORS.gold,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
@@ -391,14 +391,14 @@ const styles = StyleSheet.create({
     borderBottomColor: `${CASINO_COLORS.gold}30`,
   },
   cardHeaderLeft: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   statusIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginLeft: 8,
+    marginStart: 8,
   },
   unitName: {
     color: CASINO_COLORS.gold,
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   playersList: {
-    flexDirection: 'row-reverse', // RTL – מוצגים מימין לשמאל
+    flexDirection: 'row', // RTL – מוצגים מימין לשמאל
     flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'flex-end',
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     backgroundColor: `${CASINO_COLORS.primary}30`,
     padding: 8,
     borderRadius: 8,
-    marginLeft: 8,
+    marginStart: 8,
     marginBottom: 8,
   },
   playerName: {

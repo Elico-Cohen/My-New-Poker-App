@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 215, 0, 0.3)',
   },
   filterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   averagesGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
@@ -969,7 +969,7 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   headerRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     marginBottom: 6,
@@ -1013,7 +1013,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   gameRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
@@ -1034,14 +1034,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     width: '22%',
     textAlign: 'right',
-    paddingRight: 16,
+    paddingEnd: 16,
   },
   gameResult: {
     fontSize: 14,
     fontWeight: 'bold',
     width: '22%',
     textAlign: 'left',
-    paddingLeft: 16,
+    paddingStart: 16,
   },
   profitViewGameButton: {
     backgroundColor: CASINO_COLORS.primary,

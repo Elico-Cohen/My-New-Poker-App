@@ -116,6 +116,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 12,
-    marginLeft: 4,
+    marginStart: 4,
   }
 }); 

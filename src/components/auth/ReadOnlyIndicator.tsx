@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     color: '#d97706', // צבע כתום כהה
     fontSize: 12,
     fontWeight: '500',
-    marginLeft: 6,
+    marginStart: 6,
     textAlign: 'center',
   },
 }); 

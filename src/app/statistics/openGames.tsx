@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   filterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   winnerRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 10,
@@ -669,11 +669,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   titleWithIcon: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   titleIcon: {
-    marginLeft: 8,
+    marginStart: 8,
   },
   cardTitle: {
     color: CASINO_COLORS.gold,
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   toggleContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     marginBottom: 16, 
     backgroundColor: CASINO_COLORS.background,
     borderRadius: 8,
@@ -720,6 +720,6 @@ const styles = StyleSheet.create({
     color: CASINO_COLORS.gold,
     fontSize: 16,
     fontWeight: 'bold',
-    marginRight: 8,
+    marginEnd: 8,
   },
 });

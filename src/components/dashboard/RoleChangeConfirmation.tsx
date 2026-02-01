@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   roleBadge: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,

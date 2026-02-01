@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   itemRTL: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   itemWithDivider: {
     borderBottomWidth: 1,
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4,
+    marginStart: 4,
   },
   rank: {
     fontSize: 16,
@@ -365,19 +365,19 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
   contentContainerRtl: {
     flex: 1,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 8,
+    marginEnd: 8,
   },
   icon: {
-    marginRight: 8,
+    marginEnd: 8,
   },
   iconRtl: {
-    marginLeft: 8,
+    marginStart: 8,
   },
   title: {
     fontSize: 16,
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     minWidth: 90,
-    marginRight: 'auto',
+    marginEnd: 'auto',
   },
   value: {
     fontSize: 16,
@@ -414,10 +414,10 @@ const styles = StyleSheet.create({
   trendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
   trendValue: {
-    marginLeft: 4,
+    marginStart: 4,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   prefix: {
     fontSize: 12,
     color: CASINO_COLORS.textSecondary,
-    marginRight: 6,
+    marginEnd: 6,
     marginBottom: 2,
     textAlign: 'right',
     fontFamily: 'Inter_400Regular',

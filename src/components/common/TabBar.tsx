@@ -67,7 +67,7 @@ function TabBar({ tabs }: TabBarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row-reverse', // שינוי לתמיכה ב-RTL
+    flexDirection: 'row', // שינוי לתמיכה ב-RTL
     backgroundColor: CASINO_COLORS.background,
     borderBottomWidth: 1,
     borderBottomColor: CASINO_COLORS.gold,

@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profitCard: {
-    marginLeft: 10,
+    marginStart: 10,
   },
   tabContent: {
     padding: 10,

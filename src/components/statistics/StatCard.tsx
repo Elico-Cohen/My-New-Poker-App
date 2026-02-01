@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   headerRowRtl: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
   },
   valueRow: {
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   valueRowRtl: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'flex-start',
     flexWrap: 'wrap',
   },
@@ -404,15 +404,15 @@ const styles = StyleSheet.create({
   trendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
   trendValue: {
-    marginLeft: 4,
+    marginStart: 4,
     fontSize: 12,
     fontWeight: 'bold',
   },
   icon: {
-    marginRight: 6,
+    marginEnd: 6,
   },
   textRtl: {
     textAlign: 'right',
@@ -420,18 +420,18 @@ const styles = StyleSheet.create({
   inlineSubtitle: {
     fontSize: 14,
     color: CASINO_COLORS.textSecondary,
-    marginRight: 4,
-    marginLeft: 4,
+    marginEnd: 4,
+    marginStart: 4,
   },
   prefixAsTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: CASINO_COLORS.text,
-    marginLeft: 'auto',
+    marginStart: 'auto',
   },
   topIcon: {
-    marginLeft: 10,
-    marginRight: 10,
+    marginStart: 10,
+    marginEnd: 10,
   },
 });
 

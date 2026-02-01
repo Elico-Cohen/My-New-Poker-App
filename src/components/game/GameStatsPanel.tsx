@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   collapsedContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: CASINO_COLORS.surface,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'right',
-    marginRight: 8,
+    marginEnd: 8,
   },
   potPreview: {
     color: CASINO_COLORS.text,
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   mainStat: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 215, 0, 0.1)',
   },
   statContent: {
-    marginRight: 12,
+    marginEnd: 12,
     alignItems: 'flex-end',
   },
   mainStatValue: {
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 12,
   },
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   topPlayerRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   topPlayerText: {
     color: CASINO_COLORS.gold,
     fontSize: 13,
-    marginRight: 8,
+    marginEnd: 8,
   },
 });
 

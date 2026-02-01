@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    marginRight: 8,
+    marginEnd: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -100,6 +100,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   label: {
-    marginLeft: 8,
+    marginStart: 8,
   },
 });

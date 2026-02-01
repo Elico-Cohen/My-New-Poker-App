@@ -72,12 +72,12 @@ export function Switch({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
   label: {
-    marginLeft: 12,
+    marginStart: 12,
   },
   switchContainer: {
     borderRadius: 16,

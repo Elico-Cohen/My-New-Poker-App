@@ -192,19 +192,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: CASINO_COLORS.gold,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   personalStatsContent: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   personalStatsText: {
     color: CASINO_COLORS.gold,
     fontSize: 16,
     fontWeight: 'bold',
-    marginRight: 8,
+    marginEnd: 8,
     textAlign: 'right',
   },
   bottomPadding: {

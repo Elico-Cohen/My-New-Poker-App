@@ -241,7 +241,7 @@ export default function GroupDetailsScreen() {
         backgroundColor: CASINO_COLORS.primary,
         borderBottomWidth: 2,
         borderBottomColor: CASINO_COLORS.gold,
-        flexDirection: 'row-reverse', // תמיכה ב-RTL
+        flexDirection: 'row', // תמיכה ב-RTL
         alignItems: 'center',
         justifyContent: 'space-between',
         height: 60,

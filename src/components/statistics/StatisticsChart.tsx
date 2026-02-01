@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 8,
-    paddingRight: 0,
+    paddingEnd: 0,
   },
   legendContainer: {
     flexDirection: 'row',
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 4,
+    marginEnd: 4,
   },
   legendText: {
     color: CASINO_COLORS.text,

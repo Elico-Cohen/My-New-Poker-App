@@ -276,7 +276,7 @@ export function PlayersInGroupManagement({
   const renderPlayersList = (players: PlayerItem[], title: string) => (
     <View>
       <View style={{
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 8
@@ -293,7 +293,7 @@ export function PlayersInGroupManagement({
           borderWidth: 1,
         }}>
           <View style={{
-            flexDirection: 'row-reverse',
+            flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingVertical: 4,
@@ -420,7 +420,7 @@ export function PlayersInGroupManagement({
                 key={player.id}
                 onPress={() => handlePlayerToggle(player.id)}
                 style={{
-                  flexDirection: 'row-reverse',
+                  flexDirection: 'row',
                   alignItems: 'center',
                   padding: 12,
                   backgroundColor: CASINO_COLORS.surface,
@@ -470,7 +470,7 @@ export function PlayersInGroupManagement({
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
             <Button
               title="הוסף"
               onPress={handleConfirmAddPlayers}
@@ -584,19 +584,19 @@ const styles = StyleSheet.create({
   dropdown: { marginBottom: 16 },
   playerButton: { padding: 12, borderRadius: 8, marginBottom: 8, backgroundColor: '#35654d' },
   playerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
-  checkIcon: { marginRight: 8 },
+  checkIcon: { marginEnd: 8 },
   playerText: { flex: 1, textAlign: 'right', color: '#FFD700' },
   fixedButtonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: '#0D1B1E' },
   startButton: {
     padding: 12,
     borderRadius: 12,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFD700',
   },
-  startButtonText: { color: '#FFD700', marginRight: 8, fontSize: 16 },
+  startButtonText: { color: '#FFD700', marginEnd: 8, fontSize: 16 },
   externalButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',

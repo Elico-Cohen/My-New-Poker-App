@@ -156,16 +156,16 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   buttonRTL: {
-    flexDirection: 'row-reverse', // הפוך את כיוון האייקון והטקסט
+    flexDirection: 'row', // הפוך את כיוון האייקון והטקסט
   },
   buttonText: {
     flex: 1,
-    marginRight: 8,
+    marginEnd: 8,
   },
   buttonTextRTL: {
     textAlign: 'right',
-    marginRight: 0,
-    marginLeft: 8,
+    marginEnd: 0,
+    marginStart: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   itemRTL: {
-    flexDirection: 'row-reverse', // הפוך את כיוון האייקון והטקסט
+    flexDirection: 'row', // הפוך את כיוון האייקון והטקסט
   },
   itemTextRTL: {
     textAlign: 'right',

@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   playerColumn: {
     flex: 1,
-    marginLeft: 8,
+    marginStart: 8,
   },
   playerColumnRtl: {
     alignItems: 'flex-end',

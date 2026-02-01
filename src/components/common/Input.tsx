@@ -47,7 +47,7 @@ export function Input({
     color: theme.textPrimary,
     ...Typography.styles.bodyNormal,
     textAlign: 'right',
-    paddingLeft: clearable && value ? 40 : 16,
+    paddingStart: clearable && value ? 40 : 16,
     flex: 1,
   };
 
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   container: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,

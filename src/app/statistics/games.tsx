@@ -529,12 +529,12 @@ const styles = StyleSheet.create({
   },
   filterItem: {
     marginBottom: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   filterLabel: {
     color: CASINO_COLORS.text,
-    marginLeft: 8,
+    marginStart: 8,
     fontWeight: 'bold',
     minWidth: 60,
     textAlign: 'right',
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardContentRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   cardStatTitle: {
     fontSize: 12,
     color: CASINO_COLORS.textSecondary,
-    marginRight: 8,
+    marginEnd: 8,
   },
   cardStatValue: {
     fontSize: 22,

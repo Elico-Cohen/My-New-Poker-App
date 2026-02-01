@@ -656,7 +656,7 @@ export function EditUserDialog({
             <Text style={styles.inlineErrorText}>
               הסרת המשתמש מקבוצה זו תהפוך אותו ללא פעיל כיוון שזו הקבוצה האחרונה שלו. האם להמשיך?
             </Text>
-            <View style={{ flexDirection: 'row-reverse', justifyContent: 'flex-start', gap: 8, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-start', gap: 8, marginTop: 16 }}>
               <Button
                 title="אישור"
                 style={{ backgroundColor: CASINO_COLORS.primary, borderWidth: 1, borderColor: CASINO_COLORS.gold }}
@@ -917,30 +917,30 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   paymentUnitRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   paymentUnitText: {
     color: CASINO_COLORS.text,
-    marginRight: 8,
+    marginEnd: 8,
     textAlign: 'right',
   },
   paymentUnitSwitchContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
   },
   paymentUnitSwitchLabel: {
     color: CASINO_COLORS.text,
     fontSize: 16,
-    marginRight: 8,
+    marginEnd: 8,
     textAlign: 'right',
   },
   groupsContainer: {
     // אין שינוי כאן
   },
   groupRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -951,16 +951,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   groupInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   groupName: {
     color: CASINO_COLORS.text,
-    marginRight: 8,
+    marginEnd: 8,
     textAlign: 'right',
   },
   groupActions: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   groupActionButton: {

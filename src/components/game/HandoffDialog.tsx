@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     marginBottom: 20
   },
   infoRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
@@ -317,12 +317,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)'
   },
   userOptionContent: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
   },
   userInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 12
   },
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     color: CASINO_COLORS.gold
   },
   roleBadge: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   warningContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     padding: 12,

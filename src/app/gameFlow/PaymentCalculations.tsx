@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8, 
+    marginEnd: 8, 
   },
   headerContent: {
     flex: 1, 
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255, 215, 0, 0.3)',
   },
   copyGroupButton: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sendIndividualButton: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(37, 211, 102, 0.15)',
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   totalRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
@@ -907,6 +907,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
 });

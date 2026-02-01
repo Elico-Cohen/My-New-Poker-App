@@ -103,7 +103,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row-reverse', // For RTL support
+    flexDirection: 'row', // For RTL support
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,

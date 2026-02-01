@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse', // Changed to row-reverse for right alignment
+    flexDirection: 'row', // Changed to row-reverse for right alignment
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   summaryGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     padding: 16,
     gap: 16,
@@ -465,13 +465,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   compactView: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
   },
   playerInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 4,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailItem: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   resultSection: {
     padding: 12,
     borderRadius: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },

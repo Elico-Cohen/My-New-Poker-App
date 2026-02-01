@@ -18,7 +18,7 @@ export default function DashboardScreen() {
         backgroundColor: '#35654d',
         borderBottomWidth: 2,
         borderBottomColor: '#FFD700',
-        flexDirection: 'row-reverse',
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
@@ -53,7 +53,7 @@ export default function DashboardScreen() {
             padding: 24,
             borderRadius: 12,
             marginBottom: 16,
-            flexDirection: 'row-reverse',
+            flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 2,
@@ -66,7 +66,7 @@ export default function DashboardScreen() {
           }}
         >
           <Icon name="account-group" size="xlarge" color="#FFD700" />
-          <Text variant="h3" style={{ color: '#FFD700', marginRight: 16 }}>
+          <Text variant="h3" style={{ color: '#FFD700', marginEnd: 16 }}>
             ניהול קבוצות
           </Text>
         </TouchableOpacity>
@@ -79,7 +79,7 @@ export default function DashboardScreen() {
             padding: 24,
             borderRadius: 12,
             marginBottom: 16,
-            flexDirection: 'row-reverse',
+            flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 2,
@@ -92,7 +92,7 @@ export default function DashboardScreen() {
           }}
         >
           <Icon name="account-multiple" size="xlarge" color="#FFD700" />
-          <Text variant="h3" style={{ color: '#FFD700', marginRight: 16 }}>
+          <Text variant="h3" style={{ color: '#FFD700', marginEnd: 16 }}>
             ניהול משתמשים
           </Text>
         </TouchableOpacity>
@@ -105,7 +105,7 @@ export default function DashboardScreen() {
             padding: 24,
             borderRadius: 12,
             marginBottom: 16,
-            flexDirection: 'row-reverse',
+            flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 2,
@@ -118,7 +118,7 @@ export default function DashboardScreen() {
           }}
         >
           <Icon name="cash" size="xlarge" color="#FFD700" />
-          <Text variant="h3" style={{ color: '#FFD700', marginRight: 16 }}>
+          <Text variant="h3" style={{ color: '#FFD700', marginEnd: 16 }}>
             ניהול יחידות תשלום
           </Text>
         </TouchableOpacity>

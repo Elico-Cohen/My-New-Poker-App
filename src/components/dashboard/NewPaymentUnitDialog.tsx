@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFD700',
     textAlign: 'right',
-    marginRight: 12,
+    marginEnd: 12,
   },
   playerItemTextSelected: {
     color: '#FFFFFF',

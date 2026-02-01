@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginEnd: 8,
   },
   headerContent: {
     flex: 1,
@@ -375,13 +375,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   compactView: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
   },
   playerInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 4,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailItem: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   resultSection: {
     padding: 12,
     borderRadius: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -489,6 +489,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
 });

@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.primary,
     borderBottomWidth: 2,
     borderBottomColor: CASINO_COLORS.gold,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 60,

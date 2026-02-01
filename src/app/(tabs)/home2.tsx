@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   statsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-around',
   },
   statItem: {

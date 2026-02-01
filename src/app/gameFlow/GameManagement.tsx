@@ -993,7 +993,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
@@ -1044,7 +1044,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
   mainContent: {
     flex: 1,
@@ -1154,7 +1154,7 @@ const styles = StyleSheet.create({
   startButton: {
     paddingVertical: 16,
     borderRadius: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
@@ -1259,7 +1259,7 @@ const styles = StyleSheet.create({
   saveIndicatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
     justifyContent: 'center',
     width: 40,
   },
@@ -1275,6 +1275,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginEnd: 8,
   },
 });

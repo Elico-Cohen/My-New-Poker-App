@@ -179,6 +179,6 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.bodyLarge,
   },
   iconWithText: {
-    marginRight: 8,
+    marginEnd: 8,
   },
 }) as ButtonStylesType;

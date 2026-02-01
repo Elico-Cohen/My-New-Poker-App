@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   bannerContent: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   titleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
@@ -96,21 +96,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-    marginRight: 8,
+    marginEnd: 8,
   },
   subtitle: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
   },
   actionContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   actionText: {
     color: CASINO_COLORS.gold,
     fontSize: 14,
     fontWeight: 'bold',
-    marginRight: 8,
+    marginEnd: 8,
   },
 });
 

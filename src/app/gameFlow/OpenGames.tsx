@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginEnd: 8,
   },
   headerContent: {
     flex: 1,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   summaryRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   gameHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   winnerInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(53, 101, 77, 0.3)',
     padding: 8,
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   },
   winnerLabel: {
     color: '#FFD700',
-    marginLeft: 8,
+    marginStart: 8,
     fontSize: 16,
   },
   winnerName: {
@@ -418,6 +418,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
   },
 });

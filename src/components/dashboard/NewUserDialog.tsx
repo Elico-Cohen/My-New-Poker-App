@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     // אין שינוי כאן
   },
   groupRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 215, 0, 0.1)',
@@ -467,16 +467,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   groupInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
   },
   groupName: {
     color: CASINO_COLORS.text,
-    marginRight: 8,
+    marginEnd: 8,
     textAlign: 'right',
   },
   groupActions: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 8,
   },
   groupActionButton: {

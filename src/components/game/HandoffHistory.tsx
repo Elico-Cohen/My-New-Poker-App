@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     marginVertical: 10
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 12,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0
   },
   logItemHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)'
   },
   transferRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   reasonContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     gap: 6,
     marginBottom: 4,
     paddingHorizontal: 8
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8
   },
   originalCreatorNote: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 12,

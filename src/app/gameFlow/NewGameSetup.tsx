@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D1B1E',
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#35654d',
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 215, 0, 0.3)',
   },
   settingRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 16,
     textAlign: 'right',
-    marginLeft: 12,
+    marginStart: 12,
   },
   settingControl: {
     flex: 1,
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   playersGrid: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     width: '100%',
     alignItems: 'flex-start',
@@ -719,8 +719,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
-    marginLeft: '1%',
-    marginRight: '1%',
+    marginStart: '1%',
+    marginEnd: '1%',
     borderWidth: 1,
     borderColor: '#FFD700',
   },
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   checkIcon: {
-    marginLeft: 8,
+    marginStart: 8,
   },
   playerText: {
     flex: 1,
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
   startButton: {
     paddingVertical: 16,
     borderRadius: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,

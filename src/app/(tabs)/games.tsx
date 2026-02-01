@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     padding: 24,
     borderRadius: 12,
     marginBottom: 24,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -736,7 +736,7 @@ const styles = StyleSheet.create({
   },
   newGameButtonText: {
     color: '#FFD700',
-    marginRight: 16,
+    marginEnd: 16,
     fontSize: 24,
   },
   sectionTitle: {
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   gameCardHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   gameCardDetail: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     flex: 1,
-    marginRight: 8,
+    marginEnd: 8,
     backgroundColor: '#35654d',
     borderColor: '#FFD700',
     borderWidth: 1,
@@ -805,14 +805,14 @@ const styles = StyleSheet.create({
   },
   viewButton: {
     flex: 1,
-    marginRight: 8,
+    marginEnd: 8,
     backgroundColor: '#1f3a2b',
     borderColor: '#FFD700',
     borderWidth: 1,
   },
   deleteButton: {
     flex: 1,
-    marginLeft: 8,
+    marginStart: 8,
     backgroundColor: '#c41e3a',
     borderColor: '#FFD700',
     borderWidth: 1,
@@ -841,14 +841,14 @@ const styles = StyleSheet.create({
   },
   networkWarning: {
     backgroundColor: '#904E55',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
   },
   networkWarningText: {
     color: '#FFFFFF',
-    marginRight: 8,
+    marginEnd: 8,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
   },
   disabledNewGameButtonText: {
     color: '#999',
-    marginRight: 16,
+    marginEnd: 16,
     fontSize: 24,
   },
 });

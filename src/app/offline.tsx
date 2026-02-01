@@ -190,13 +190,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   featureItem: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
   featureText: {
     color: CASINO_COLORS.text,
-    marginRight: 8,
+    marginEnd: 8,
     fontSize: 16,
     textAlign: 'right',
   },

@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.primary,
     borderBottomWidth: 2,
     borderBottomColor: CASINO_COLORS.gold,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: CASINO_COLORS.success,
-    marginRight: 8,
+    marginEnd: 8,
   },
   groupName: {
     color: CASINO_COLORS.gold,
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   infoLabel: {
-    marginLeft: 8,
+    marginStart: 8,
     color: CASINO_COLORS.gold,
   },
   infoBox: {
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playersText: {
-    marginLeft: 8,
+    marginStart: 8,
     color: CASINO_COLORS.gold,
   },
   errorCard: {
@@ -428,10 +428,10 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
-    marginRight: 4,
+    marginEnd: 4,
   },
   deleteButton: {
     padding: 8,
-    marginLeft: 4,
+    marginStart: 4,
   },
 });

@@ -961,7 +961,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,215,0,0.1)',
   },
   filterRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
@@ -980,7 +980,7 @@ const styles = StyleSheet.create({
     backgroundColor: CASINO_COLORS.surface,
   },
   rankingTypeRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
   },
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,215,0,0.1)',
   },
   cardTitleRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
     color: CASINO_COLORS.gold,
     fontSize: 18,
     fontWeight: 'bold',
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     lineHeight: 24,
@@ -1065,7 +1065,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   playerRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,

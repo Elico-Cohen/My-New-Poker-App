@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   },
   itemContent: {
     flex: 1,
-    marginRight: 16,
+    marginEnd: 16,
   },
   separator: {
     height: 1,

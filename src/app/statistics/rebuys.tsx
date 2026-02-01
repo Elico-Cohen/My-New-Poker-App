@@ -386,7 +386,7 @@ export default function RebuyStatisticsScreen() {
               marginBottom: 16
             }}>
               <View style={{
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 8
               }}>
@@ -394,7 +394,7 @@ export default function RebuyStatisticsScreen() {
                 <Text style={{
                   fontSize: 14,
                   color: "#FFFFFF",
-                  marginRight: 8,
+                  marginEnd: 8,
                   fontWeight: '500'
                 }}>
                   בתאריך {rebuyStats?.gameWithMostRebuys.date || 'לא ידוע'}
@@ -428,18 +428,18 @@ export default function RebuyStatisticsScreen() {
             
             {rebuyStats?.gameWithMostRebuys.topRebuyPlayers && rebuyStats.gameWithMostRebuys.topRebuyPlayers.length > 0 ? (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בריבאיים:</Text>
                 {rebuyStats.gameWithMostRebuys.topRebuyPlayers.map((player, index) => (
                   <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
                     <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingEnd: 0, marginEnd: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
                     <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
                   </View>
                 ))}
               </View>
             ) : (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בריבאיים:</Text>
                 <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
               </View>
             )}
@@ -475,7 +475,7 @@ export default function RebuyStatisticsScreen() {
               marginBottom: 16
             }}>
               <View style={{
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 8
               }}>
@@ -483,7 +483,7 @@ export default function RebuyStatisticsScreen() {
                 <Text style={{
                   fontSize: 14,
                   color: "#FFFFFF",
-                  marginRight: 8,
+                  marginEnd: 8,
                   fontWeight: '500'
                 }}>
                   בתאריך {gameWithLeastRebuys.date || 'לא ידוע'}
@@ -517,18 +517,18 @@ export default function RebuyStatisticsScreen() {
             
             {gameWithLeastRebuys.topRebuyPlayers && gameWithLeastRebuys.topRebuyPlayers.length > 0 ? (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בריבאיים:</Text>
                 {gameWithLeastRebuys.topRebuyPlayers.map((player: any, index: number) => (
                   <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
                     <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingEnd: 0, marginEnd: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
                     <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.rebuyCount || 0} ריבאיים</Text>
                   </View>
                 ))}
               </View>
             ) : (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בריבאיים:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בריבאיים:</Text>
                 <Text style={styles.noDataText}>אין שחקנים שביצעו ריבאיים במשחק זה</Text>
               </View>
             )}
@@ -562,7 +562,7 @@ export default function RebuyStatisticsScreen() {
               marginBottom: 16
             }}>
               <View style={{
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 8
               }}>
@@ -570,7 +570,7 @@ export default function RebuyStatisticsScreen() {
                 <Text style={{
                   fontSize: 14,
                   color: "#FFFFFF",
-                  marginRight: 8,
+                  marginEnd: 8,
                   fontWeight: '500'
                 }}>
                   בתאריך {rebuyStats.gameWithMostPurchases.date || 'לא ידוע'}
@@ -604,18 +604,18 @@ export default function RebuyStatisticsScreen() {
             
             {rebuyStats.gameWithMostPurchases.topPurchasePlayers && rebuyStats.gameWithMostPurchases.topPurchasePlayers.length > 0 ? (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בקניות:</Text>
                 {rebuyStats.gameWithMostPurchases.topPurchasePlayers.map((player, index) => (
                   <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
                     <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingEnd: 0, marginEnd: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
                     <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
                   </View>
                 ))}
               </View>
             ) : (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בקניות:</Text>
                 <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
               </View>
             )}
@@ -645,7 +645,7 @@ export default function RebuyStatisticsScreen() {
               marginBottom: 16
             }}>
               <View style={{
-                flexDirection: 'row-reverse',
+                flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 8
               }}>
@@ -653,7 +653,7 @@ export default function RebuyStatisticsScreen() {
                 <Text style={{
                   fontSize: 14,
                   color: "#FFFFFF",
-                  marginRight: 8,
+                  marginEnd: 8,
                   fontWeight: '500'
                 }}>
                   בתאריך {rebuyStats.gameWithLeastPurchases.date || 'לא ידוע'}
@@ -687,18 +687,18 @@ export default function RebuyStatisticsScreen() {
             
             {rebuyStats.gameWithLeastPurchases.topPurchasePlayers && rebuyStats.gameWithLeastPurchases.topPurchasePlayers.length > 0 ? (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בקניות:</Text>
                 {rebuyStats.gameWithLeastPurchases.topPurchasePlayers.map((player, index) => (
                   <View key={index} style={[styles.topPlayerRow, {paddingHorizontal: 0, marginHorizontal: 0}]}>
                     <Text style={styles.topPlayerIndex}>.{index + 1}</Text>
-                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingRight: 0, marginRight: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
+                    <Text style={[styles.topPlayerName, styles.highlightedValue, {paddingEnd: 0, marginEnd: 0}]}>{player.playerName || 'שחקן לא ידוע'}</Text>
                     <Text style={[styles.topPlayerRebuys, styles.boldValue]}>{player.purchaseAmount?.toLocaleString() || 0} ש"ח</Text>
                   </View>
                 ))}
               </View>
             ) : (
               <View style={[styles.topPlayersContainer, {padding: 0}]}>
-                <Text style={[styles.topPlayersTitle, {paddingRight: 0}]}>שחקנים מובילים בקניות:</Text>
+                <Text style={[styles.topPlayersTitle, {paddingEnd: 0}]}>שחקנים מובילים בקניות:</Text>
                 <Text style={styles.noDataText}>אין נתונים על שחקנים מובילים</Text>
               </View>
             )}
@@ -1217,7 +1217,7 @@ const styles = StyleSheet.create({
    backgroundColor: CASINO_COLORS.background,
  },
  header: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    justifyContent: 'space-between',
    alignItems: 'center',
    backgroundColor: CASINO_COLORS.primary,
@@ -1240,7 +1240,7 @@ const styles = StyleSheet.create({
    borderBottomColor: 'rgba(255, 215, 0, 0.3)',
  },
  filterRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    marginBottom: 8,
  },
@@ -1308,7 +1308,7 @@ const styles = StyleSheet.create({
    marginBottom: 12,
    textAlign: 'right',
    display: 'flex',
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    justifyContent: 'flex-end',
  },
@@ -1347,7 +1347,7 @@ const styles = StyleSheet.create({
    textAlign: 'center',
  },
  gameInfoRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    justifyContent: 'space-around',
    marginVertical: 8,
    width: '100%',
@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
    marginBottom: 16,
  },
  gameStatItem: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    marginHorizontal: 8,
    justifyContent: 'flex-start',
@@ -1430,21 +1430,20 @@ const styles = StyleSheet.create({
  gameStatLabel: {
    color: CASINO_COLORS.textSecondary,
    fontSize: 14,
-   marginStart: 4,
+   marginStart: 8,
    textAlign: 'right',
-   marginLeft: 8,
  },
  gameStatValue: {
    fontSize: 14,
    fontWeight: 'bold',
    textAlign: 'right',
-   marginRight: 0,
+   marginEnd: 0,
  },
  topPlayersContainer: {
    marginBottom: 16,
    paddingHorizontal: 0,
-   paddingRight: 0,
-   paddingLeft: 0,
+   paddingEnd: 0,
+   paddingStart: 0,
  },
  topPlayersTitle: {
    color: CASINO_COLORS.gold,
@@ -1452,16 +1451,16 @@ const styles = StyleSheet.create({
    fontWeight: 'bold',
    marginBottom: 8,
    textAlign: 'right',
-   paddingRight: 0,
+   paddingEnd: 0,
  },
  topPlayerRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    marginBottom: 4,
-   paddingRight: 0,
-   paddingLeft: 0,
-   marginRight: 0,
-   marginLeft: 0,
+   paddingEnd: 0,
+   paddingStart: 0,
+   marginEnd: 0,
+   marginStart: 0,
    width: '100%',
  },
  topPlayerIndex: {
@@ -1469,15 +1468,15 @@ const styles = StyleSheet.create({
    fontSize: 14,
    fontWeight: 'bold',
    textAlign: 'right',
-   paddingLeft: 0,
+   paddingStart: 0,
    color: CASINO_COLORS.gold,
  },
  topPlayerName: {
    flex: 1,
    fontSize: 14,
    textAlign: 'right',
-   paddingRight: 0,
-   marginRight: 0,
+   paddingEnd: 0,
+   marginEnd: 0,
  },
  topPlayerRebuys: {
    fontSize: 14,
@@ -1529,8 +1528,8 @@ const styles = StyleSheet.create({
  topGroupsContainer: {
    marginBottom: 16,
    paddingHorizontal: 0,
-   paddingRight: 0,
-   paddingLeft: 0,
+   paddingEnd: 0,
+   paddingStart: 0,
  },
  topGroupsTitle: {
    color: CASINO_COLORS.gold,
@@ -1538,10 +1537,10 @@ const styles = StyleSheet.create({
    fontWeight: 'bold',
    marginBottom: 8,
    textAlign: 'right',
-   paddingRight: 0,
+   paddingEnd: 0,
  },
  topGroupRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    marginBottom: 4,
    paddingHorizontal: 0,
@@ -1565,7 +1564,7 @@ const styles = StyleSheet.create({
    borderRadius: 8,
  },
  headerRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    justifyContent: 'flex-start',
    marginBottom: 6,
@@ -1632,7 +1631,7 @@ const styles = StyleSheet.create({
    lineHeight: 16,
  },
  titleTextContainer: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    justifyContent: 'flex-end',
  },
@@ -1652,7 +1651,7 @@ const styles = StyleSheet.create({
    paddingVertical: 12,
  },
  customPlayerDataRow: {
-   flexDirection: 'row-reverse',
+   flexDirection: 'row',
    alignItems: 'center',
    justifyContent: 'center',
    padding: 12,
@@ -1666,7 +1665,7 @@ const styles = StyleSheet.create({
    color: '#FFFFFF',
    fontWeight: 'bold',
    fontSize: 18,
-   marginLeft: 8,
+   marginStart: 8,
  },
  rebuyCountText: {
    color: '#FFD700',
@@ -1683,6 +1682,6 @@ const styles = StyleSheet.create({
    justifyContent: 'center',
    alignItems: 'center',
    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-   marginLeft: 8,
+   marginStart: 8,
  },
 });

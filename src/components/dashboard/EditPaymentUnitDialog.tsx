@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   playersContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'flex-end',
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FFD700',
-    marginLeft: 8,
+    marginStart: 8,
     marginBottom: 8,
   },
   playerText: {

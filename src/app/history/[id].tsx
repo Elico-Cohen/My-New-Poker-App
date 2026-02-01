@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     borderColor: CASINO_COLORS.gold,
   },
   summaryRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 12,
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   chipsInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 215, 0, 0.3)',
     paddingTop: 12,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   tabsContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 8,
   },
@@ -865,13 +865,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   compactView: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 6,
   },
   playerInfo: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: 4,
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailItem: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   resultSection: {
     padding: 12,
     borderRadius: 8,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
@@ -995,7 +995,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   openGameDetail: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   totalRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
